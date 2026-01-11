@@ -8,8 +8,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
     <link rel="stylesheet" id="mainStyle">
     <script>document.getElementById('mainStyle').href = 'style.css?v=' + Date.now();</script>
+    <!-- OTPAuth 用于生成 TOTP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/otpauth/9.1.2/otpauth.umd.min.js"></script>
+    <!-- jsQR 用于二维码识别 -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
 <body>
+    <!-- 登录页 -->
     <div class="login-container" id="loginContainer">
         <div class="login-box">
             <button class="theme-toggle-login" onclick="toggleTheme()" id="themeBtn2">🌙</button>
@@ -32,6 +37,7 @@
         </div>
     </div>
 
+    <!-- 主应用 -->
     <div class="app" id="app">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
@@ -40,7 +46,7 @@
                     <button class="btn-header btn-avatar" onclick="toggleUserPanel()" id="userAvatar" title="个人设置">👤</button>
                     <button class="btn-header" onclick="toggleSidebar()">◀</button>
                 </div>
-                <!-- 用户面板（头像点击弹出） -->
+                <!-- 用户面板 -->
                 <div class="user-panel" id="userPanel">
                     <div class="user-panel-header">
                         <div class="user-avatar-large" id="userAvatarLarge">👤</div>
@@ -51,7 +57,7 @@
                         <div class="user-panel-item" onclick="openFavStylePicker()">💌 收藏样式</div>
                         <div class="user-panel-item" onclick="openPasswordReset()">🔑 重置密码</div>
                         <div class="user-panel-item" onclick="toggleTheme()"><span id="themeBtn">🌙</span> 切换主题</div>
-                        <a class="user-panel-item" href="https://github.com/shleeshlee/account-manager" target="_blank" style="text-decoration:none;color:inherit;">🌻 1one/GitHub</a>
+                        <a class="user-panel-item" href="https://github.com/shleeshlee/account-manager" target="_blank" style="text-decoration:none;color:inherit;">🌻 GitHub</a>
                     </div>
                     <div class="user-panel-footer">
                         <button class="btn-logout-full" onclick="logout()">退出登录</button>
@@ -90,12 +96,12 @@
                     <button class="view-btn active" data-view="card" onclick="setViewMode('card')" title="卡片视图">🃏</button>
                     <button class="view-btn" data-view="list" onclick="setViewMode('list')" title="列表视图">☰</button>
                 </div>
-                <!-- PC端按钮（带文字） -->
+                <!-- PC端按钮 -->
                 <button class="btn-toolbar pc-only" id="btnBatchMode" onclick="toggleBatchMode()" title="批量选择">✅ 勾选账号</button>
                 <button class="btn-toolbar pc-only" onclick="openImportModal()" title="导入数据">📥 导入</button>
                 <button class="btn-toolbar pc-only" onclick="exportData()" title="导出数据">📤 导出</button>
                 <button class="btn-primary pc-only" onclick="openAddModal()">➕ 添加账号</button>
-                <!-- 移动端按钮（带简要文字） -->
+                <!-- 移动端按钮 -->
                 <button class="btn-toolbar-sm mobile-only" id="btnBatchModeMobile" onclick="toggleBatchMode()" title="勾选">✅ 勾选</button>
                 <div class="tools-menu-wrapper mobile-only">
                     <button class="btn-toolbar-sm" onclick="toggleToolsMenu()" title="更多">⚙️ 更多</button>
@@ -119,65 +125,104 @@
         </main>
     </div>
 
-    <!-- 账号模态框 -->
+    <!-- 账号编辑模态框 -->
     <div class="modal-overlay" id="accountModal">
         <div class="modal">
             <div class="modal-header"><h2 class="modal-title" id="accountModalTitle">添加账号</h2><button class="btn-close" onclick="closeAccountModal()">✕</button></div>
             <div class="modal-body">
                 <div class="form-row">
-                    <div class="form-group"><label class="form-label">账号类型</label><select class="form-select" id="accType"></select></div>
-                    <div class="form-group w100"><label class="form-label">国家/地区</label><select class="form-select" id="accCountry">
-                        <option value="🌍">🌍 全球</option>
-                        <option value="US">🇺🇸 US</option>
-                        <option value="JP">🇯🇵 JP</option>
-                        <option value="TW">🇹🇼 TW</option>
-                        <option value="HK">🇭🇰 HK</option>
-                        <option value="SG">🇸🇬 SG</option>
-                        <option value="KR">🇰🇷 KR</option>
-                        <option value="GB">🇬🇧 GB</option>
-                        <option value="DE">🇩🇪 DE</option>
-                        <option value="FR">🇫🇷 FR</option>
-                        <option value="AU">🇦🇺 AU</option>
-                        <option value="CA">🇨🇦 CA</option>
-                        <option value="IN">🇮🇳 IN</option>
-                        <option value="VN">🇻🇳 VN</option>
-                        <option value="TH">🇹🇭 TH</option>
-                        <option value="MY">🇲🇾 MY</option>
-                        <option value="ID">🇮🇩 ID</option>
-                        <option value="PH">🇵🇭 PH</option>
-                        <option value="BR">🇧🇷 BR</option>
-                        <option value="RU">🇷🇺 RU</option>
-                        <option value="CN">🇨🇳 CN</option>
-                    </select></div>
+                    <div class="form-group flex-1"><label class="form-label">账号类型</label><select class="form-select" id="accType"></select></div>
+                    <div class="form-group flex-1"><label class="form-label">国家/地区</label><select class="form-select" id="accCountry"></select></div>
                 </div>
-                <div class="form-group"><label class="form-label">自定义名称</label><input type="text" class="form-input" id="accName" placeholder="如：API主力号"></div>
-                <div class="form-row">
-                    <div class="form-group"><label class="form-label">邮箱/账号</label><input type="text" class="form-input" id="accEmail"></div>
-                    <div class="form-group"><label class="form-label">密码（可选）</label>
-                        <div class="password-input-wrapper">
-                            <input type="text" class="form-input" id="accPassword">
-                            <button type="button" class="btn-generate-pwd" onclick="generateAndFillPassword()" title="生成16位随机密码">🎲</button>
-                        </div>
+                <div class="form-group"><label class="form-label">邮箱/账号</label><input type="text" class="form-input" id="accEmail"></div>
+                <div class="form-group">
+                    <label class="form-label">密码</label>
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" class="form-input" id="accPassword" style="flex:1">
+                        <button type="button" class="btn-option" onclick="generateAndFillPassword()" title="生成强密码">🎲</button>
                     </div>
                 </div>
-                <div class="form-group"><label class="form-label">服务状态</label><div class="combos-box" id="accCombosBox"></div></div>
-                <div class="form-group"><label class="form-label">标签</label><div class="tags-input-box" id="accTagsBox"><input type="text" class="tag-input" id="accTagInput" placeholder="回车添加" onkeydown="handleTagInput(event)"></div></div>
+                <div class="form-group"><label class="form-label">自定义名称</label><input type="text" class="form-input" id="accCustomName"></div>
+                <div class="form-group"><label class="form-label">属性组合标签</label><div id="comboEditor"></div></div>
+                <div class="form-group"><label class="form-label">自由标签</label><div id="tagsEditor"></div></div>
                 <div class="form-group"><label class="form-label">备注</label><textarea class="form-textarea" id="accNotes"></textarea></div>
             </div>
-            <div class="modal-footer">
-                <button class="btn-2fa-config" id="btn2FAConfig" onclick="open2FAConfig(editingAccountId)" style="display:none">🛡️ 2FA</button>
-                <button class="btn-cancel" onclick="closeAccountModal()">取消</button>
-                <button class="btn-save" onclick="saveAccount()">保存</button>
+            <div class="modal-footer" style="justify-content: space-between;">
+                <button class="btn-option" id="btnConfig2FA" onclick="open2FAConfig()" style="display:none;">🛡️ 配置 2FA</button>
+                <div style="display:flex;gap:10px;">
+                    <button class="btn-cancel" onclick="closeAccountModal()">取消</button>
+                    <button class="btn-save" onclick="saveAccount()">保存</button>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- 属性组模态框 -->
+    <!-- 2FA 配置模态框 (新增) -->
+    <div class="modal-overlay" id="twoFAConfigModal">
+        <div class="modal" style="max-width:480px">
+            <div class="modal-header">
+                <h2 class="modal-title">🛡️ 配置双重验证</h2>
+                <button class="btn-close" onclick="close2FAConfigModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- 二维码扫描区 -->
+                <div class="form-group">
+                    <label class="form-label">📷 扫描二维码 (推荐)</label>
+                    <div class="qr-upload-zone" id="qrUploadZone" onclick="document.getElementById('qrFileInput').click()">
+                        <input type="file" id="qrFileInput" accept="image/*" style="display:none" onchange="handleQRUpload(event)">
+                        <div class="qr-upload-content">
+                            <span class="qr-upload-icon">📸</span>
+                            <span class="qr-upload-text">点击上传或拖拽二维码图片</span>
+                            <span class="qr-upload-hint">支持 Google Authenticator、Microsoft Authenticator 等</span>
+                        </div>
+                        <canvas id="qrCanvas" style="display:none"></canvas>
+                    </div>
+                    <div id="qrScanResult" class="qr-scan-result" style="display:none"></div>
+                </div>
+                
+                <div class="import-divider"><span>或手动输入</span></div>
+                
+                <!-- 手动输入区 -->
+                <div class="form-group">
+                    <label class="form-label">🔑 密钥 (Base32)</label>
+                    <input type="text" class="form-input" id="totp2FASecret" placeholder="例如: JBSWY3DPEHPK3PXP">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">📝 发行方 (可选)</label>
+                    <input type="text" class="form-input" id="totp2FAIssuer" placeholder="例如: Google, GitHub">
+                </div>
+                <div class="form-row">
+                    <div class="form-group flex-1">
+                        <label class="form-label">类型</label>
+                        <select class="form-select" id="totp2FAType">
+                            <option value="totp">标准 TOTP</option>
+                            <option value="steam">Steam Guard</option>
+                        </select>
+                    </div>
+                    <div class="form-group flex-1">
+                        <label class="form-label">位数</label>
+                        <select class="form-select" id="totp2FADigits">
+                            <option value="6" selected>6 位</option>
+                            <option value="8">8 位</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-danger" id="btn2FADelete" onclick="delete2FA()" style="display:none">🗑️ 删除</button>
+                <div style="flex:1"></div>
+                <button class="btn-cancel" onclick="close2FAConfigModal()">取消</button>
+                <button class="btn-save" onclick="save2FAConfig()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 属性组管理模态框 -->
     <div class="modal-overlay" id="propertyModal">
         <div class="modal wide"><div class="modal-header"><h2 class="modal-title">管理属性组</h2><button class="btn-close" onclick="closePropertyManager()">✕</button></div><div class="modal-body" id="propertyEditorBody"></div></div>
     </div>
 
-    <!-- 类型模态框 -->
+    <!-- 类型管理模态框 -->
     <div class="modal-overlay" id="typeModal">
         <div class="modal wide"><div class="modal-header"><h2 class="modal-title">管理账号类型</h2><button class="btn-close" onclick="closeTypeManager()">✕</button></div><div class="modal-body" id="typeEditorBody"></div></div>
     </div>
@@ -227,6 +272,23 @@
         </div>
     </div>
 
+    <!-- TOTP 显示模态框 -->
+    <div class="modal-overlay" id="totpModal">
+        <div class="modal small">
+            <div class="modal-header">
+                <h2 class="modal-title">🛡️ 2FA 验证码</h2>
+                <button class="btn-close" onclick="document.getElementById('totpModal').classList.remove('show')">✕</button>
+            </div>
+            <div class="modal-body" style="text-align:center;padding:30px 20px;">
+                <div id="totpCodeDisplay" style="font-size:2.5rem;font-family:'JetBrains Mono';font-weight:600;letter-spacing:4px;color:var(--accent);margin-bottom:10px;">------</div>
+                <div id="totpTimer" style="height:4px;background:var(--border);width:100%;border-radius:2px;overflow:hidden;">
+                    <div id="totpProgressBar" style="width:100%;height:100%;background:var(--accent);transition:width 1s linear;"></div>
+                </div>
+                <div style="margin-top:15px;color:var(--text-secondary);font-size:0.85rem;">已自动复制到剪贴板</div>
+            </div>
+        </div>
+    </div>
+
     <!-- 密码重置模态框 -->
     <div class="modal-overlay" id="passwordModal">
         <div class="modal small">
@@ -260,86 +322,11 @@
         </div>
     </div>
 
-    <!-- 2FA 配置模态框 (v5.0 新增二维码扫描) -->
-    <div class="modal-overlay" id="twoFAConfigModal">
-        <div class="modal">
-            <div class="modal-header">
-                <h2 class="modal-title">🛡️ 配置双重验证 (2FA)</h2>
-                <button class="btn-close" onclick="close2FAConfigModal()">✕</button>
-            </div>
-            <div class="modal-body">
-                <!-- 二维码上传区域 -->
-                <div class="form-group">
-                    <label class="form-label">📷 扫描二维码</label>
-                    <div class="qr-upload-zone" id="qrUploadZone" onclick="document.getElementById('qrFileInput').click()">
-                        <input type="file" id="qrFileInput" accept="image/*" style="display:none" onchange="handleQRUpload(event)">
-                        <div class="qr-upload-content">
-                            <div class="qr-upload-icon">📸</div>
-                            <div class="qr-upload-text">点击上传或拖拽二维码图片</div>
-                            <div class="qr-upload-hint">支持 Google Authenticator、Microsoft Authenticator 等</div>
-                        </div>
-                        <canvas id="qrCanvas" style="display:none"></canvas>
-                    </div>
-                    <div class="qr-scan-result" id="qrScanResult" style="display:none"></div>
-                </div>
-
-                <div class="import-divider"><span>或手动输入</span></div>
-
-                <!-- 手动配置 -->
-                <div class="form-group">
-                    <label class="form-label">🔑 密钥 (Secret)</label>
-                    <input type="text" class="form-input" id="totp2FASecret" placeholder="Base32 密钥，如 JBSWY3DPEHPK3PXP">
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">📛 发行方 (Issuer)</label>
-                        <input type="text" class="form-input" id="totp2FAIssuer" placeholder="如 Google、Steam">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">🔢 类型</label>
-                        <select class="form-input" id="totp2FAType">
-                            <option value="totp">标准 TOTP (6位数字)</option>
-                            <option value="steam">Steam Guard (5位字母)</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">🔐 算法</label>
-                        <select class="form-input" id="totp2FAAlgorithm">
-                            <option value="SHA1">SHA1 (默认)</option>
-                            <option value="SHA256">SHA256</option>
-                            <option value="SHA512">SHA512</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">#️⃣ 位数</label>
-                        <select class="form-input" id="totp2FADigits">
-                            <option value="6">6 位</option>
-                            <option value="8">8 位</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">⏱️ 时间偏移 (秒)</label>
-                    <input type="number" class="form-input" id="totp2FATimeOffset" value="0" placeholder="服务器时间差，通常为 0">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-danger" id="btn2FADelete" onclick="delete2FAFromModal()" style="display:none">🗑️ 移除 2FA</button>
-                <div style="flex:1"></div>
-                <button class="btn-secondary" onclick="close2FAConfigModal()">取消</button>
-                <button class="btn-primary" onclick="save2FAConfig()">💾 保存配置</button>
-            </div>
-        </div>
-    </div>
-
+    <!-- Toast 提示 -->
     <div class="toast" id="toast"></div>
-    
-    <!-- jsQR 二维码识别库 -->
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+
+    <!-- 脚本加载 -->
     <script>
-        // 动态加载JS，先加载flags，再加载app
         const flagsScript = document.createElement('script');
         flagsScript.src = 'flags.js?v=' + Date.now();
         flagsScript.onload = function() {

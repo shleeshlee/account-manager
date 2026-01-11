@@ -1,5 +1,5 @@
 const API = '/api';
-const VERSION = 'v5.0'; // 完整2FA支持(含Steam Guard)、二维码扫描、安全加固
+const VERSION = 'v4.0'; // 新增二维码扫描导入2FA、代码结构优化
 let token = localStorage.getItem('token');
 let user = JSON.parse(localStorage.getItem('user') || 'null');
 let accounts = [], accountTypes = [], propertyGroups = [];
@@ -14,36 +14,6 @@ let batchMode = false;
 let selectedAccounts = new Set();
 let pendingImportData = null;
 let duplicateAccounts = [];
-
-// ==================== 补丁：核心 API 请求函数 ====================
-async function apiRequest(endpoint, options = {}) {
-    const url = API + endpoint;
-    
-    // 自动携带 Token 和 Content-Type
-    const defaultHeaders = {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token
-    };
-
-    const config = {
-        ...options,
-        headers: {
-            ...defaultHeaders,
-            ...options.headers
-        }
-    };
-
-    const response = await fetch(url, config);
-
-    // 如果 Token 过期 (401)，自动跳转登录
-    if (response.status === 401) {
-        handleAuthError();
-        throw new Error('登录已过期');
-    }
-
-    return response;
-}
-// ==================== 补丁结束 ====================
 
 // 国家代码映射（使用区域指示符号组合）
 const COUNTRY_MAP = {
@@ -76,44 +46,8 @@ function init() {
     initViewMode();
     initFavStyle();
     if (token && user) { showApp(); loadData(); }
-    checkSecurity(); // 安全检查
-}
-
-// ==================== 安全检查 ====================
-async function checkSecurity() {
-    try {
-        const res = await fetch(API + '/health');
-        const data = await res.json();
-        
-        if (data.key_status === 'unsafe_default') {
-            showSecurityModal(
-                '⚠️ 安全警报：正在使用默认公开密钥！',
-                '系统检测到您使用的是默认的 <b>APP_MASTER_KEY</b>。<br><br>' +
-                '1. 您的数据目前处于<b>裸奔状态</b>，极易被破解！<br>' +
-                '2. <b>请勿在此状态下保存重要数据！</b><br>' +
-                '3. 请立即去 <code>docker-compose.yml</code> 修改密钥并重启。<br><br>' +
-                '❌ <b>切记：如果您现在存了数据，以后再改密钥，数据将永久无法解密！</b>'
-            );
-        } else if (data.key_status === 'file_based') {
-            console.warn('正在使用文件密钥模式，请注意备份 data/.encryption_key');
-            showToast('⚠️ 提示：当前未配置环境变量密钥，请妥善备份 data 目录', true);
-        }
-    } catch (e) {
-        console.error('安全检查失败', e);
-    }
-}
-
-function showSecurityModal(title, htmlContent) {
-    const warningHtml = `
-    <div style="position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;">
-        <div style="background:#18181b;border:2px solid #ef4444;border-radius:16px;padding:30px;max-width:500px;text-align:center;box-shadow:0 0 50px rgba(239,68,68,0.5);">
-            <div style="font-size:4rem;margin-bottom:20px;">☢️</div>
-            <h2 style="color:#ef4444;margin-bottom:20px;font-size:1.5rem;">${title}</h2>
-            <div style="color:#e4e4e7;text-align:left;line-height:1.6;font-size:0.95rem;background:rgba(239,68,68,0.1);padding:15px;border-radius:8px;">${htmlContent}</div>
-            <div style="margin-top:25px;font-size:0.85rem;color:#71717a;">修改 docker-compose.yml 后重启容器，此警告将自动消失。</div>
-        </div>
-    </div>`;
-    document.body.insertAdjacentHTML('beforeend', warningHtml);
+    // 👇 新增安全检查
+    checkSecurity();
 }
 
 // 视图模式
@@ -233,6 +167,49 @@ async function loadUserAvatar() {
     let avatar = user.avatar || '👤';
     document.getElementById('userAvatar').textContent = avatar;
     document.getElementById('userAvatarLarge').textContent = avatar;
+}
+
+async function checkSecurity() {
+    try {
+        const res = await fetch(API + '/health');
+        const data = await res.json();
+        
+        // 🚨 情况一：使用了公开默认 Key (P0级风险)
+        if (data.key_status === 'unsafe_default') {
+            showSecurityModal(
+                '⚠️ 安全警报：正在使用默认公开密钥！',
+                '系统检测到您使用的是默认的 <b>APP_MASTER_KEY</b>。<br><br>' +
+                '1. 您的数据目前处于<b>裸奔状态</b>，极易被破解！<br>' +
+                '2. <b>请勿在此状态下保存重要数据！</b><br>' +
+                '3. 请立即去 <code>docker-compose.yml</code> 修改密钥并重启。<br><br>' +
+                '❌ <b>切记：如果您现在存了数据，以后再改密钥，数据将永久无法解密！</b>'
+            );
+        }
+        // ⚠️ 情况二：使用了文件自动生成 Key (P1级风险)
+        else if (data.key_status === 'file_based') {
+            console.warn('正在使用文件密钥模式，请注意备份 data/.encryption_key');
+            showToast('⚠️ 提示：当前未配置环境变量密钥，请妥善备份 data 目录', true);
+        }
+    } catch (e) {
+        console.error('安全检查失败', e);
+    }
+}
+
+// 添加一个专门显示“严重警告”的弹窗函数 
+function showSecurityModal(title, htmlContent) {
+    const warningHtml = `
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;">
+        <div style="background:#18181b;border:2px solid #ef4444;border-radius:16px;padding:30px;max-width:500px;text-align:center;box-shadow:0 0 50px rgba(239,68,68,0.5);">
+            <div style="font-size:4rem;margin-bottom:20px;">☢️</div>
+            <h2 style="color:#ef4444;margin-bottom:20px;font-size:1.5rem;">${title}</h2>
+            <div style="color:#e4e4e7;text-align:left;line-height:1.6;font-size:0.95rem;background:rgba(239,68,68,0.1);padding:15px;border-radius:8px;">${htmlContent}</div>
+            <div style="margin-top:25px;font-size:0.85rem;color:#71717a;">
+                修改 docker-compose.yml 后重启容器，此警告将自动消失。
+            </div>
+        </div>
+    </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', warningHtml);
 }
 
 // 数据加载
@@ -399,11 +376,12 @@ function renderCards() {
                 ${(acc.tags||[]).length ? `<div class="card-tags">${acc.tags.map(t => `<span class="free-tag">${t}</span>`).join('')}</div>` : ''}
             </div>
             <div class="card-footer">
-                <button class="btn-action" onclick="event.stopPropagation();copyPassword(${acc.id})" title="复制密码">🔑 密码</button>
-                ${acc.has_2fa ? `<button class="btn-action btn-2fa" onclick="event.stopPropagation();show2FAPopup(${acc.id})" title="查看验证码">🛡️ 2FA</button>` : ''}
-                <button class="btn-action" onclick="event.stopPropagation();copyEmail('${escapeHtml(acc.email)}')" title="复制邮箱">📋 复制</button>
-                <button class="btn-action" onclick="event.stopPropagation();loginTest(${acc.id})" title="登录测试">🔗 登录</button>
-            </div>
+    <button class="btn-action" onclick="copyEmail('${escapeHtml(acc.password)}', event)">📋 密码</button>
+    <button class="btn-action" onclick="${acc.has_2fa ? `showTOTP(${acc.id})` : `openEditModal(${acc.id})`}" style="${acc.has_2fa ? 'color:var(--accent);border-color:var(--accent);background:var(--accent-dim);' : ''}">
+        🛡️ ${acc.has_2fa ? '2FA' : '无'}
+    </button>
+    <button class="btn-action" onclick="loginTest(${acc.id})">🔗 登录</button>
+</div>
         </div>`;
     }).join('');
     
@@ -669,18 +647,7 @@ async function toggleFavorite(id) {
     try { const res = await fetch(API + `/accounts/${id}/favorite`, { method: 'POST', headers: { Authorization: 'Bearer ' + token } }); if (res.ok) { const data = await res.json(); const acc = accounts.find(a => a.id === id); if (acc) acc.is_favorite = data.is_favorite; renderSidebar(); renderCards(); } } catch {}
 }
 
-function copyEmail(email) { navigator.clipboard.writeText(email); showToast('📋 邮箱已复制'); }
-
-// 复制密码
-async function copyPassword(accountId) {
-    const acc = accounts.find(a => a.id === accountId);
-    if (!acc) return;
-    if (!acc.password) { showToast('该账号未设置密码', true); return; }
-    await navigator.clipboard.writeText(acc.password);
-    showToast('🔑 密码已复制');
-    // 标记使用时间
-    apiRequest(`/accounts/${accountId}/use`, { method: 'POST' }).catch(() => {});
-}
+function copyEmail(email) { navigator.clipboard.writeText(email); showToast('已复制'); }
 
 async function loginTest(id) {
     const acc = accounts.find(a => a.id === id);
@@ -703,10 +670,8 @@ function openAddModal() {
     document.getElementById('accType').innerHTML = accountTypes.map(t => `<option value="${t.id}">${t.icon} ${t.name}</option>`).join('');
     ['accName', 'accEmail', 'accPassword', 'accNotes'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('accCountry').value = '🌍';
-    // 隐藏 2FA 按钮（添加时不显示）
-    const btn2FA = document.getElementById('btn2FAConfig');
-    if (btn2FA) btn2FA.style.display = 'none';
     renderCombosBox(); renderTagsBox();
+    document.getElementById('btnConfig2FA').style.display = 'none';
     document.getElementById('accountModal').classList.add('show');
 }
 
@@ -721,13 +686,8 @@ function openEditModal(id) {
     document.getElementById('accPassword').value = acc.password || '';
     document.getElementById('accCountry').value = acc.country || '🌍';
     document.getElementById('accNotes').value = acc.notes || '';
-    // 显示 2FA 按钮（编辑时显示）
-    const btn2FA = document.getElementById('btn2FAConfig');
-    if (btn2FA) {
-        btn2FA.style.display = 'inline-flex';
-        btn2FA.textContent = acc.has_2fa ? '🛡️ 2FA ✓' : '🛡️ 2FA';
-    }
     renderCombosBox(); renderTagsBox();
+    document.getElementById('btnConfig2FA').style.display = 'block';
     document.getElementById('accountModal').classList.add('show');
 }
 
@@ -1417,219 +1377,69 @@ function initFavStyle() {
     applyFavStyle(styleId);
 }
 
-// ==================== v12.0 新增：随机密码生成器 ====================
-function generatePassword(length = 16) {
-    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%&*';
-    const array = new Uint32Array(length);
-    window.crypto.getRandomValues(array);
-    return Array.from(array, x => chars[x % chars.length]).join('');
-}
+init();
 
+// 随机密码生成
 function generateAndFillPassword() {
-    const pwd = generatePassword(16);
-    const input = document.getElementById('accPassword');
-    if (input) {
-        input.value = pwd;
-        input.type = 'text';
-        setTimeout(() => input.type = 'password', 3000);
-    }
-    navigator.clipboard.writeText(pwd).then(() => {
-        showToast('🎲 已生成16位强密码并复制');
-    });
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+    let password = "";
+    const randomValues = new Uint32Array(16);
+    window.crypto.getRandomValues(randomValues);
+    for (let i = 0; i < 16; i++) password += chars[randomValues[i] % chars.length];
+    document.getElementById('accPassword').value = password;
+    navigator.clipboard.writeText(password);
+    showToast('⚡ 已生成强密码并复制');
 }
 
-// ==================== v12.0 新增：2FA TOTP 模块 ====================
-const STEAM_CHARS = "23456789BCDFGHJKMNPQRTVWXY";
-let totpIntervals = {};
-let clipboardTimeout = null;
-
-function base32Decode(str) {
-    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-    str = str.toUpperCase().replace(/\s+/g, '').replace(/=+$/, '');
-    let bits = '', bytes = [];
-    for (let c of str) {
-        const idx = alphabet.indexOf(c);
-        if (idx >= 0) bits += idx.toString(2).padStart(5, '0');
-    }
-    for (let i = 0; i + 8 <= bits.length; i += 8) {
-        bytes.push(parseInt(bits.slice(i, i + 8), 2));
-    }
-    return new Uint8Array(bytes);
-}
-
-async function hmacSha1(key, data) {
-    const cryptoKey = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
-    return new Uint8Array(await crypto.subtle.sign('HMAC', cryptoKey, data));
-}
-
-async function generateTOTP(secret, timeOffset = 0, digits = 6, period = 30) {
+// 2FA 显示与计算
+let totpInterval = null;
+async function showTOTP(accountId) {
     try {
-        const key = base32Decode(secret);
-        let counter = Math.floor((Date.now() / 1000 + timeOffset) / period);
-        const counterBytes = new Uint8Array(8);
-        for (let i = 7; i >= 0; i--) { counterBytes[i] = counter & 0xff; counter = Math.floor(counter / 256); }
-        const hash = await hmacSha1(key, counterBytes);
-        const offset = hash[hash.length - 1] & 0x0f;
-        const code = ((hash[offset] & 0x7f) << 24 | (hash[offset + 1] & 0xff) << 16 | (hash[offset + 2] & 0xff) << 8 | (hash[offset + 3] & 0xff)) % Math.pow(10, digits);
-        return code.toString().padStart(digits, '0');
-    } catch (e) { console.error('TOTP错误:', e); return ''; }
-}
-
-async function generateSteamCode(secret, timeOffset = 0) {
-    try {
-        const key = Uint8Array.from(atob(secret), c => c.charCodeAt(0));
-        let counter = Math.floor((Date.now() / 1000 + timeOffset) / 30);
-        const counterBytes = new Uint8Array(8);
-        for (let i = 7; i >= 0; i--) { counterBytes[i] = counter & 0xff; counter = Math.floor(counter / 256); }
-        const hash = await hmacSha1(key, counterBytes);
-        const offset = hash[hash.length - 1] & 0x0f;
-        let code = ((hash[offset] & 0x7f) << 24 | (hash[offset + 1] & 0xff) << 16 | (hash[offset + 2] & 0xff) << 8 | (hash[offset + 3] & 0xff));
-        let result = '';
-        for (let i = 0; i < 5; i++) { result += STEAM_CHARS[code % STEAM_CHARS.length]; code = Math.floor(code / STEAM_CHARS.length); }
-        return result;
-    } catch (e) { console.error('Steam错误:', e); return ''; }
-}
-
-function getTimeRemaining(period = 30) {
-    return period - Math.floor(Date.now() / 1000) % period;
-}
-
-async function show2FAPopup(accountId) {
-    const acc = accounts.find(a => a.id === accountId);
-    if (!acc || !acc.has_2fa) { showToast('该账号未配置2FA', true); return; }
-    try {
-        // 先获取配置信息
-        const configRes = await apiRequest(`/accounts/${accountId}/totp`);
-        if (!configRes.ok) throw new Error();
-        const data = await configRes.json();
-        
-        const popup = document.createElement('div');
-        popup.className = 'totp-popup';
-        popup.id = `totp-popup-${accountId}`;
-        popup.innerHTML = `<div class="totp-popup-content">
-            <div class="totp-header"><span class="totp-issuer">${data.issuer || acc.email}</span><button class="totp-close" onclick="close2FAPopup(${accountId})">✕</button></div>
-            <div class="totp-code-wrapper">
-                <div class="totp-code" id="totp-code-${accountId}" onclick="copyTOTPCode(${accountId})" style="cursor:pointer">------</div>
-                <svg class="totp-timer" viewBox="0 0 36 36"><path class="totp-timer-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/><path class="totp-timer-progress" id="totp-progress-${accountId}" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/></svg>
-            </div>
-            <div class="totp-actions"><button class="totp-copy-btn" onclick="copyTOTPCode(${accountId})">📋 复制</button><span class="totp-remaining" id="totp-remaining-${accountId}"></span></div>
-        </div>`;
-        document.body.appendChild(popup);
-        popup.totpData = data;
-        
-        // 使用后端生成
-        await updateTOTPDisplayFromBackend(accountId, data);
-        totpIntervals[accountId] = setInterval(() => updateTOTPDisplayFromBackend(accountId, data), 1000);
-        popup.addEventListener('click', e => { if (e.target === popup) close2FAPopup(accountId); });
-    } catch { showToast('获取2FA失败', true); }
-}
-
-async function updateTOTPDisplayFromBackend(accountId, configData) {
-    const codeEl = document.getElementById(`totp-code-${accountId}`);
-    const progressEl = document.getElementById(`totp-progress-${accountId}`);
-    const remainingEl = document.getElementById(`totp-remaining-${accountId}`);
-    if (!codeEl) { clearInterval(totpIntervals[accountId]); return; }
-    
-    try {
-        // 从后端获取验证码
-        const res = await apiRequest(`/accounts/${accountId}/totp/generate`);
-        if (!res.ok) return;
+        const res = await fetch(API + `/accounts/${accountId}/totp`, { headers: { Authorization: 'Bearer ' + token } });
         const data = await res.json();
+        if (!data.secret) { showToast('未配置 2FA', true); return; }
         
-        const code = data.code;
-        const remaining = data.remaining;
-        const period = data.period || 30;
-        const progress = (remaining / period) * 100;
+        const totp = new OTPAuth.TOTP({ algorithm: 'SHA1', digits: 6, period: 30, secret: OTPAuth.Secret.fromBase32(data.secret) });
+        const update = () => {
+            const code = totp.generate();
+            document.getElementById('totpCodeDisplay').textContent = code.slice(0,3) + ' ' + code.slice(3);
+            const remaining = 30 - (Math.round(new Date().getTime() / 1000.0) % 30);
+            const bar = document.getElementById('totpProgressBar');
+            bar.style.width = ((remaining / 30) * 100) + '%';
+            bar.style.background = remaining < 5 ? '#ef4444' : 'var(--accent)';
+            document.getElementById('totpCodeDisplay').style.color = remaining < 5 ? '#ef4444' : 'var(--accent)';
+        };
         
-        // 显示验证码（Steam 5位字母，标准TOTP分隔显示）
-        if (data.type === 'steam') {
-            codeEl.textContent = code;
-            codeEl.style.letterSpacing = '6px';
-        } else {
-            const mid = Math.floor(code.length / 2);
-            codeEl.textContent = code.slice(0, mid) + ' ' + code.slice(mid);
-        }
-        codeEl.dataset.code = code;
-        
-        progressEl.style.strokeDasharray = `${progress}, 100`;
-        if (remaining <= 5) { progressEl.style.stroke = '#ef4444'; codeEl.classList.add('expiring'); }
-        else if (remaining <= 10) { progressEl.style.stroke = '#f59e0b'; codeEl.classList.remove('expiring'); }
-        else { progressEl.style.stroke = '#8b5cf6'; codeEl.classList.remove('expiring'); }
-        remainingEl.textContent = `${remaining}s`;
-    } catch (e) {
-        console.error('更新验证码失败:', e);
-    }
+        document.getElementById('totpModal').classList.add('show');
+        update();
+        if (totpInterval) clearInterval(totpInterval);
+        totpInterval = setInterval(update, 1000);
+        navigator.clipboard.writeText(totp.generate());
+        showToast('验证码已复制');
+    } catch (e) { console.error(e); showToast('2FA 生成失败', true); }
 }
 
-// 保留前端生成函数作为备用
-async function updateTOTPDisplay(accountId, data) {
-    const codeEl = document.getElementById(`totp-code-${accountId}`);
-    const progressEl = document.getElementById(`totp-progress-${accountId}`);
-    const remainingEl = document.getElementById(`totp-remaining-${accountId}`);
-    if (!codeEl) { clearInterval(totpIntervals[accountId]); return; }
-    const remaining = getTimeRemaining(data.period || 30);
-    const progress = (remaining / (data.period || 30)) * 100;
-    const code = data.type === 'steam' ? await generateSteamCode(data.secret, data.time_offset || 0) : await generateTOTP(data.secret, data.time_offset || 0, data.digits || 6, data.period || 30);
-    if (!codeEl.classList.contains('blurred')) codeEl.textContent = code.length === 6 ? code.slice(0, 3) + ' ' + code.slice(3) : code;
-    codeEl.dataset.code = code;
-    progressEl.style.strokeDasharray = `${progress}, 100`;
-    if (remaining <= 5) { progressEl.style.stroke = '#ef4444'; codeEl.classList.add('expiring'); }
-    else if (remaining <= 10) { progressEl.style.stroke = '#f59e0b'; codeEl.classList.remove('expiring'); }
-    else { progressEl.style.stroke = '#8b5cf6'; codeEl.classList.remove('expiring'); }
-    remainingEl.textContent = `${remaining}s`;
-}
 
-function toggleTOTPBlur(accountId) {
-    const codeEl = document.getElementById(`totp-code-${accountId}`);
-    if (!codeEl) return;
-    codeEl.classList.toggle('blurred');
-    if (!codeEl.classList.contains('blurred')) {
-        const code = codeEl.dataset.code || '';
-        codeEl.textContent = code.length === 6 ? code.slice(0, 3) + ' ' + code.slice(3) : code;
-        setTimeout(() => { if (codeEl && !codeEl.classList.contains('blurred')) { codeEl.classList.add('blurred'); codeEl.textContent = '------'; } }, 10000);
-    } else codeEl.textContent = '------';
-}
+// ==================== v4.0 新增：2FA 配置模态框 + 二维码扫描 ====================
 
-function copyTOTPCode(accountId) {
-    const codeEl = document.getElementById(`totp-code-${accountId}`);
-    if (!codeEl) return;
-    navigator.clipboard.writeText(codeEl.dataset.code || '').then(() => {
-        showToast('✓ 验证码已复制 (60秒后清除)');
-        if (clipboardTimeout) clearTimeout(clipboardTimeout);
-        clipboardTimeout = setTimeout(() => navigator.clipboard.writeText('').catch(() => {}), 60000);
-    });
-}
-
-function close2FAPopup(accountId) {
-    document.getElementById(`totp-popup-${accountId}`)?.remove();
-    if (totpIntervals[accountId]) { clearInterval(totpIntervals[accountId]); delete totpIntervals[accountId]; }
-}
-
-// ==================== v5.0 新增：二维码扫描 + 2FA 配置模态框 ====================
-
-let current2FAAccountId = null;
-
-function open2FAConfig(accountId) {
-    const acc = accounts.find(a => a.id === accountId);
-    if (!acc) return;
+function open2FAConfig() {
+    if (!editingAccountId) return;
     
-    current2FAAccountId = accountId;
+    const acc = accounts.find(a => a.id === editingAccountId);
     const modal = document.getElementById('twoFAConfigModal');
     
     // 重置表单
     document.getElementById('totp2FASecret').value = '';
     document.getElementById('totp2FAIssuer').value = '';
     document.getElementById('totp2FAType').value = 'totp';
-    document.getElementById('totp2FAAlgorithm').value = 'SHA1';
     document.getElementById('totp2FADigits').value = '6';
-    document.getElementById('totp2FATimeOffset').value = '0';
     document.getElementById('qrScanResult').style.display = 'none';
     document.getElementById('qrScanResult').innerHTML = '';
     
     // 如果已有2FA配置，加载现有配置
-    if (acc.has_2fa) {
+    if (acc && acc.has_2fa) {
         document.getElementById('btn2FADelete').style.display = 'block';
-        loadExisting2FAConfig(accountId);
+        loadExisting2FAConfig(editingAccountId);
     } else {
         document.getElementById('btn2FADelete').style.display = 'none';
     }
@@ -1642,21 +1452,20 @@ function open2FAConfig(accountId) {
 
 function close2FAConfigModal() {
     document.getElementById('twoFAConfigModal').classList.remove('show');
-    current2FAAccountId = null;
 }
 
 async function loadExisting2FAConfig(accountId) {
     try {
-        const res = await apiRequest(`/accounts/${accountId}/totp`);
+        const res = await fetch(API + `/accounts/${accountId}/totp`, {
+            headers: { Authorization: 'Bearer ' + token }
+        });
         if (res.ok) {
             const data = await res.json();
             if (data.secret) {
                 document.getElementById('totp2FASecret').value = data.secret;
                 document.getElementById('totp2FAIssuer').value = data.issuer || '';
                 document.getElementById('totp2FAType').value = data.type || 'totp';
-                document.getElementById('totp2FAAlgorithm').value = data.algorithm || 'SHA1';
                 document.getElementById('totp2FADigits').value = data.digits || 6;
-                document.getElementById('totp2FATimeOffset').value = data.time_offset || 0;
             }
         }
     } catch (e) {
@@ -1738,11 +1547,9 @@ function parseOtpAuthUri(uri) {
         const url = new URL(uri);
         const params = url.searchParams;
         
-        // 提取 secret
         const secret = params.get('secret');
         if (secret) document.getElementById('totp2FASecret').value = secret;
         
-        // 提取 issuer
         let issuer = params.get('issuer');
         if (!issuer) {
             const path = decodeURIComponent(url.pathname.slice(1));
@@ -1750,24 +1557,12 @@ function parseOtpAuthUri(uri) {
         }
         if (issuer) document.getElementById('totp2FAIssuer').value = issuer;
         
-        // 提取类型
         const type = url.host;
         if (type === 'totp' || type === 'hotp') document.getElementById('totp2FAType').value = type;
         if (uri.toLowerCase().includes('steam')) document.getElementById('totp2FAType').value = 'steam';
         
-        // 提取算法
-        const algorithm = params.get('algorithm');
-        if (algorithm) document.getElementById('totp2FAAlgorithm').value = algorithm.toUpperCase();
-        
-        // 提取位数
         const digits = params.get('digits');
         if (digits) document.getElementById('totp2FADigits').value = digits;
-        
-        // 提取周期
-        const period = params.get('period');
-        if (period) console.log('周期:', period); // 后端会使用
-        
-        console.log('解析 otpauth URI:', { secret: secret ? '***' : null, issuer, type });
     } catch (e) {
         console.error('解析 otpauth URI 失败:', e);
     }
@@ -1782,53 +1577,45 @@ async function save2FAConfig() {
         secret: secret,
         issuer: document.getElementById('totp2FAIssuer').value.trim(),
         totp_type: document.getElementById('totp2FAType').value,
-        algorithm: document.getElementById('totp2FAAlgorithm').value,
+        algorithm: 'SHA1',
         digits: parseInt(document.getElementById('totp2FADigits').value) || 6,
-        period: 30,
-        backup_codes: []
+        period: 30
     };
     
     try {
-        const res = await apiRequest(`/accounts/${current2FAAccountId}/totp`, {
+        const res = await fetch(API + `/accounts/${editingAccountId}/totp`, {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
             body: JSON.stringify(config)
         });
         
         if (res.ok) {
             showToast('✅ 2FA 配置成功');
             close2FAConfigModal();
-            await loadData();
+            await loadAccounts();
+            renderCards();
+            const btn = document.getElementById('btnConfig2FA');
+            if (btn) { btn.innerHTML = '✅ 2FA 已激活'; btn.style.color = '#22c55e'; btn.style.borderColor = '#22c55e'; btn.style.background = 'rgba(34, 197, 94, 0.1)'; }
         } else {
             const data = await res.json();
             showToast(data.detail || '保存失败', true);
         }
-    } catch (e) {
-        console.error('保存2FA配置错误:', e);
-        showToast('网络错误', true);
-    }
+    } catch (e) { showToast('网络错误', true); }
 }
 
-async function delete2FAFromModal() {
+async function delete2FA() {
     if (!confirm('⚠️ 确定要移除该账号的 2FA 保护吗？')) return;
-    
     try {
-        const res = await apiRequest(`/accounts/${current2FAAccountId}/totp`, { method: 'DELETE' });
+        const res = await fetch(API + `/accounts/${editingAccountId}/totp`, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } });
         if (res.ok) {
             showToast('🗑️ 2FA 已移除');
             close2FAConfigModal();
-            await loadData();
-        } else {
-            showToast('移除失败', true);
-        }
-    } catch (e) {
-        showToast('网络错误', true);
-    }
-}
-
-// 保留旧的 delete2FA 函数兼容
-async function delete2FA(accountId) {
-    current2FAAccountId = accountId;
-    await delete2FAFromModal();
+            await loadAccounts();
+            renderCards();
+            const btn = document.getElementById('btnConfig2FA');
+            if (btn) { btn.innerHTML = '🛡️ 配置 2FA'; btn.style.color = ''; btn.style.borderColor = ''; btn.style.background = ''; }
+        } else { showToast('移除失败', true); }
+    } catch (e) { showToast('网络错误', true); }
 }
 
 init();

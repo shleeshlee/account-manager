@@ -1,145 +1,163 @@
-# 🍯 AccBox - 通用账号管家
+# 🍯 AccBox (通用账号管家)
 
-一个安全、简洁的多用户账号管理系统，支持 **完整 2FA 验证码生成**、**二维码扫描导入**、**Steam Guard** 等功能。
+一个简洁、安全的多用户账号管理系统，支持 2FA 验证码生成、二维码扫描导入、自定义分类标签等功能。
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-5.0-green.svg)
-![Docker](https://img.shields.io/badge/docker-ready-blue.svg)
-
-## 📦 版本选择
-
-| 版本 | 定位 | 获取方式 |
-|------|------|----------|
-| **v5.0** (当前) | 🚀 主推版本，功能完整 | `git clone` 默认获取 |
-| v4.0 | 📦 简洁版，代码重构 | [切换到 v4 分支](../../tree/v4) |
-
-### 版本功能对比
-
-| 功能 | v5.0 ✅ | v4.0 |
-|------|---------|------|
-| 标准 TOTP (6/8位) | ✅ | ✅ |
-| Steam Guard (5位字母) | ✅ | ✅ |
-| 二维码扫描导入 | ✅ | ✅ |
-| 多算法 (SHA1/256/512) | ✅ | ✅ |
-| **时间偏移校正** | ✅ | ❌ |
-| **备份码管理** | ✅ | ❌ |
-| 安全中间件 | ✅ | ✅ |
-| 环境变量密钥 | ✅ | ✅ |
-
-> 💡 **推荐使用 v5.0**，功能更完整。v4.0 适合追求极简代码的开发者。
-
----
+![Version](https://img.shields.io/badge/version-4.0-green.svg)
 
 ## ✨ 功能特性
 
-### 🛡️ 完整 2FA 支持
-- **标准 TOTP** - 支持 6/8 位数字验证码
-- **Steam Guard** - Steam 专用 5 位字母验证码
-- **多算法** - SHA1 / SHA256 / SHA512
-- **二维码扫描** - 上传或拖拽图片自动识别
-- **URI 导入** - 支持 `otpauth://` 链接
-- **时间校正** - 服务器时间差修正
-- **动画倒计时** - 验证码过期可视化
+### 核心功能
+- 🔐 **密码加密存储** - 使用 Fernet 对称加密，支持环境变量配置主密钥
+- 🛡️ **2FA 双重验证** - 内置 TOTP 验证码生成器，支持标准 6/8 位验证码
+- 📷 **二维码扫描** - 直接上传或拖拽 2FA 二维码图片自动识别导入
+- 👥 **多用户隔离** - 每个用户独立数据空间，互不干扰
+- 🔒 **安全中间件** - 自动阻止访问敏感文件（源码、数据库、密钥）
 
-### 🔐 安全特性
-- **Fernet 加密** - 密码加密存储
-- **环境变量密钥** - 支持 `APP_MASTER_KEY` 配置
-- **安全中间件** - 阻止访问敏感文件
-- **前端警告** - 不安全配置时显示警告
-- **多用户隔离** - 独立数据空间
+### 账号管理
+- 📁 自定义账号类型（Google、Microsoft、Discord 等）
+- 🎨 账号类型自定义图标和背景色
+- 🏷️ 自定义属性组和组合标签
+- ⭐ 收藏功能（多种样式可选）
+- 🕐 最近使用记录追踪
+- 🔍 搜索和多条件筛选
 
-### 📁 账号管理
-- 自定义账号类型（图标、颜色、登录链接）
-- 组合标签系统
-- 收藏功能（多种样式）
-- 批量操作
-- JSON/CSV 导入导出
+### 数据管理
+- 📥 JSON/CSV 导入导出
+- ✅ 批量选择和删除
+- 🔄 导入重复检测（跳过/覆盖/全部导入）
 
-### 🎨 界面体验
-- 日间/夜间主题
-- 卡片/列表视图
-- 响应式设计
-- 自定义头像
-
----
+### 界面体验
+- 🌙 日间/夜间主题切换
+- 🃏 卡片/列表两种视图模式
+- 👤 用户头像自定义
+- 📱 响应式设计，支持移动端
 
 ## 🚀 快速部署
 
-### Docker 一键部署（推荐）
+### 方式一：Docker 一键部署（推荐）
 
 ```bash
 # 1. 克隆项目
 git clone https://github.com/shleeshlee/account-manager.git
 cd account-manager
 
-# 2. 生成安全密钥（重要！）
+# 2. 修改密钥（重要！）
+# 生成安全密钥:
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# 将生成的密钥填入 docker-compose.yml 的 APP_MASTER_KEY
 
-# 3. 修改 docker-compose.yml 中的 APP_MASTER_KEY
-
-# 4. 启动
+# 3. 启动服务
 docker-compose up -d
 
-# 5. 访问 http://localhost:9111
+# 4. 访问
+# 浏览器打开 http://localhost:9111
 ```
 
-### 手动部署
+### 方式二：手动部署
 
 ```bash
+# 安装依赖
 pip install fastapi uvicorn cryptography pydantic
-export APP_MASTER_KEY="your-secure-key"
+
+# 设置密钥（可选，不设置则自动生成文件密钥）
+export APP_MASTER_KEY="your-secure-key-here"
+
+# 启动
 python main.py
 ```
 
----
-
 ## 🔐 安全配置
 
-### 密钥模式
+### 密钥管理
+
+AccBox 支持三种密钥模式：
 
 | 模式 | 安全级别 | 说明 |
 |------|---------|------|
-| 环境变量 | ⭐⭐⭐ 推荐 | `APP_MASTER_KEY` |
-| 文件密钥 | ⭐⭐ | 自动生成 `data/.encryption_key` |
-| 默认密钥 | ❌ 危险 | 会显示红色警告 |
+| 环境变量密钥 | ⭐⭐⭐ 推荐 | 通过 `APP_MASTER_KEY` 环境变量配置 |
+| 文件密钥 | ⭐⭐ | 自动生成 `data/.encryption_key` 文件 |
+| 默认公开密钥 | ❌ 危险 | 使用默认值，数据极易被破解 |
 
-### 生成密钥
+**⚠️ 重要提醒：**
+- 使用默认密钥时，系统会显示红色安全警告
+- 一旦存入数据，更换密钥将导致旧数据无法解密
+- 请在首次使用前配置好正式密钥
+
+### 生成安全密钥
 
 ```python
 from cryptography.fernet import Fernet
 print(Fernet.generate_key().decode())
-# 输出类似: gAAAAABk...
+# 输出类似: d8Kf9sJ2mN4pQ7rT0vW3xY6zA1bC5eH8iL=
 ```
 
-⚠️ **警告**：使用默认密钥时，系统会显示安全警告。请在存入数据前配置正式密钥！
+## 📷 2FA 二维码扫描
 
----
+v4.0 新增二维码扫描功能，支持：
 
-## 📷 二维码扫描
+1. **上传图片** - 点击上传区域选择二维码截图
+2. **拖拽导入** - 直接将图片拖到上传区域
+3. **自动识别** - 解析 `otpauth://` URI 并填充配置
 
-支持直接扫描 2FA 二维码图片：
+支持的 2FA 应用：
+- Google Authenticator
+- Microsoft Authenticator  
+- Authy
+- 1Password
+- 其他标准 TOTP 应用
 
-1. 点击 **🛡️ 配置 2FA**
-2. 上传或拖拽二维码截图
-3. 自动识别并填充配置
+## 📁 项目结构
 
-支持：Google Authenticator、Microsoft Authenticator、Authy、1Password 等
+```
+account-manager/
+├── index.html          # 前端页面
+├── style.css           # 样式文件
+├── app.js              # 前端逻辑
+├── flags.js            # 国家旗帜图标
+├── main.py             # 后端 API (FastAPI)
+├── Dockerfile          # Docker 镜像构建
+├── docker-compose.yml  # Docker Compose 配置
+└── data/               # 数据目录（自动创建）
+    ├── accounts.db     # SQLite 数据库
+    └── .encryption_key # 加密密钥（文件模式）
+```
 
----
+## 🛠️ 常用操作
 
-## 🎮 Steam Guard
+### 修改端口
 
-1. 获取 Steam `shared_secret`（Base64格式）
-2. 点击账号的 **🛡️ 2FA** 按钮
-3. 选择类型 **Steam Guard**
-4. 粘贴密钥并保存
-5. 即可生成 5 位字母验证码
+```yaml
+# docker-compose.yml
+ports:
+  - "你的端口:9111"
+```
 
----
+### 查看日志
 
-## 📝 API 接口
+```bash
+docker-compose logs -f
+```
 
-访问 `http://localhost:9111/docs` 查看完整 API 文档。
+### 数据备份
+
+```bash
+# 备份数据目录
+cp -r data/ data_backup_$(date +%Y%m%d)/
+
+# 或导出 JSON（在 Web 界面操作）
+# 点击 📤 导出 按钮
+```
+
+### 停止服务
+
+```bash
+docker-compose down
+```
+
+## 📝 API 文档
+
+启动后访问 `http://localhost:9111/docs` 查看 Swagger API 文档。
 
 ### 主要接口
 
@@ -149,51 +167,33 @@ print(Fernet.generate_key().decode())
 | `/api/login` | POST | 用户登录 |
 | `/api/accounts` | GET/POST | 账号列表/创建 |
 | `/api/accounts/{id}/totp` | GET/POST/DELETE | 2FA 配置 |
-| `/api/accounts/{id}/totp/generate` | GET | 生成验证码 |
 | `/api/export` | GET | 导出数据 |
 | `/api/import` | POST | 导入数据 |
-| `/api/health` | GET | 健康检查 |
-
----
-
-## 📁 项目结构
-
-```
-account-manager/
-├── index.html          # 前端页面
-├── style.css           # 样式文件
-├── app.js              # 前端逻辑
-├── flags.js            # 国家旗帜
-├── main.py             # 后端 API
-├── Dockerfile          
-├── docker-compose.yml  
-├── nginx.conf          
-└── data/               # 数据目录
-    ├── accounts.db
-    └── .encryption_key
-```
-
----
+| `/api/health` | GET | 健康检查（含密钥状态） |
 
 ## 🔄 更新日志
 
-### v5.0
-- ✨ 二维码扫描导入 2FA
-- ✨ 后端验证码生成（支持 Steam Guard）
-- ✨ 算法选择（SHA1/SHA256/SHA512）
-- ✨ 时间偏移校正
-- 🔒 安全中间件 + 环境变量密钥
-
-### v4.0
-- 🔧 代码重构整理
-- ✨ 二维码扫描
-- ✨ 完整 2FA 支持
+### v4.0 (当前版本)
+- ✨ 新增：二维码扫描导入 2FA 配置
+- ✨ 新增：2FA 配置模态框（替代 prompt 弹窗）
+- 🔧 优化：后端代码结构重构
+- 🔧 优化：2FA API 支持更多配置项（issuer、算法、位数）
+- 🔒 安全：密钥状态检测与前端警告
 
 ### v3.0
-- 🔒 安全中间件
-- ✨ 2FA 基础功能
+- 安全中间件（阻止访问敏感文件）
+- 环境变量密钥支持
+- 2FA 基础功能
 
----
+### v2.0
+- 组合标签系统
+- 批量操作功能
+- 导入重复检测
+
+### v1.0
+- 基础账号管理
+- 多用户支持
+- 主题切换
 
 ## 🤝 贡献
 
