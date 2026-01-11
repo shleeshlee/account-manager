@@ -10,6 +10,7 @@ import json
 import sqlite3
 import hashlib
 import secrets
+import time
 from datetime import datetime, timedelta
 from contextlib import contextmanager
 from typing import Optional, List, Dict
@@ -785,6 +786,76 @@ def delete_account(account_id: int, user: dict = Depends(get_current_user)):
 # 2FA API
 # ============================================================
 
+import hmac
+import struct
+import re
+
+# Steam Guard 字符集
+STEAM_CHARS = "23456789BCDFGHJKMNPQRTVWXY"
+
+
+def generate_totp(secret: str, time_offset: int = 0, digits: int = 6, period: int = 30, algorithm: str = "SHA1") -> str:
+    """生成标准 TOTP 验证码"""
+    try:
+        import base64
+        # 补齐 Base32 填充
+        secret_clean = secret.upper().replace(" ", "").replace("-", "")
+        padding = (8 - len(secret_clean) % 8) % 8
+        key = base64.b32decode(secret_clean + "=" * padding)
+        
+        counter = (int(time.time()) + time_offset) // period
+        counter_bytes = struct.pack(">Q", counter)
+        
+        hash_func = {"SHA256": hashlib.sha256, "SHA512": hashlib.sha512}.get(algorithm.upper(), hashlib.sha1)
+        h = hmac.new(key, counter_bytes, hash_func).digest()
+        
+        offset = h[-1] & 0x0F
+        code = struct.unpack(">I", h[offset:offset + 4])[0] & 0x7FFFFFFF
+        return str(code % (10 ** digits)).zfill(digits)
+    except Exception as e:
+        print(f"TOTP生成错误: {e}")
+        return ""
+
+
+def generate_steam_code(secret: str, time_offset: int = 0) -> str:
+    """生成 Steam Guard 5位字母验证码"""
+    try:
+        import base64
+        key = base64.b64decode(secret)
+        counter = (int(time.time()) + time_offset) // 30
+        h = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
+        offset = h[-1] & 0x0F
+        code = struct.unpack(">I", h[offset:offset + 4])[0] & 0x7FFFFFFF
+        return "".join(STEAM_CHARS[code // (len(STEAM_CHARS) ** i) % len(STEAM_CHARS)] for i in range(5))
+    except Exception as e:
+        print(f"Steam Guard生成错误: {e}")
+        return ""
+
+
+def parse_otpauth_uri(uri: str) -> Optional[dict]:
+    """解析 otpauth:// URI"""
+    try:
+        match = re.match(r'otpauth://(totp|hotp)/([^?]+)\?(.+)', uri)
+        if not match:
+            return None
+        params = dict(p.split('=', 1) for p in match.group(3).split('&') if '=' in p)
+        label = match.group(2)
+        # URL 解码
+        from urllib.parse import unquote
+        label = unquote(label)
+        return {
+            "type": match.group(1),
+            "label": label,
+            "secret": params.get("secret", ""),
+            "issuer": unquote(params.get("issuer", "")),
+            "algorithm": params.get("algorithm", "SHA1").upper(),
+            "digits": int(params.get("digits", 6)),
+            "period": int(params.get("period", 30))
+        }
+    except Exception:
+        return None
+
+
 @app.get("/api/accounts/{account_id}/totp")
 def get_totp_config(account_id: int, user: dict = Depends(get_current_user)):
     """获取 2FA 配置"""
@@ -811,6 +882,46 @@ def get_totp_config(account_id: int, user: dict = Depends(get_current_user)):
         }
 
 
+@app.get("/api/accounts/{account_id}/totp/generate")
+def generate_totp_code(account_id: int, user: dict = Depends(get_current_user)):
+    """生成当前 2FA 验证码（支持标准TOTP和Steam Guard）"""
+    with get_db() as conn:
+        cursor = conn.execute(f"""
+            SELECT totp_secret, totp_type, totp_algorithm, totp_digits, totp_period
+            FROM user_{user['id']}_accounts WHERE id = ?
+        """, (account_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="账号不存在")
+        
+        secret = decrypt_password(row["totp_secret"]) if row["totp_secret"] else None
+        if not secret:
+            raise HTTPException(status_code=404, detail="未配置 2FA")
+        
+        totp_type = row["totp_type"] or "totp"
+        
+        if totp_type == "steam":
+            code = generate_steam_code(secret)
+        else:
+            code = generate_totp(
+                secret,
+                digits=row["totp_digits"] or 6,
+                period=row["totp_period"] or 30,
+                algorithm=row["totp_algorithm"] or "SHA1"
+            )
+        
+        # 计算剩余时间
+        period = row["totp_period"] or 30
+        remaining = period - (int(time.time()) % period)
+        
+        return {
+            "code": code,
+            "type": totp_type,
+            "remaining": remaining,
+            "period": period
+        }
+
+
 @app.post("/api/accounts/{account_id}/totp")
 def update_totp_config(account_id: int, config: TotpConfig, user: dict = Depends(get_current_user)):
     """更新 2FA 配置"""
@@ -826,6 +937,41 @@ def update_totp_config(account_id: int, config: TotpConfig, user: dict = Depends
               config.algorithm, config.digits, config.period, now, account_id))
         conn.commit()
     return {"message": "2FA 配置已更新"}
+
+
+@app.post("/api/accounts/{account_id}/totp/parse")
+def parse_and_save_totp_uri(account_id: int, data: dict, user: dict = Depends(get_current_user)):
+    """从 otpauth:// URI 导入 2FA 配置"""
+    uri = data.get("uri", "")
+    parsed = parse_otpauth_uri(uri)
+    if not parsed:
+        raise HTTPException(status_code=400, detail="无效的 otpauth URI")
+    
+    now = datetime.now().isoformat()
+    with get_db() as conn:
+        conn.execute(f"""
+            UPDATE user_{user['id']}_accounts 
+            SET totp_secret = ?, totp_issuer = ?, totp_type = ?, 
+                totp_algorithm = ?, totp_digits = ?, totp_period = ?, updated_at = ?
+            WHERE id = ?
+        """, (
+            encrypt_password(parsed["secret"]),
+            parsed["issuer"] or parsed["label"],
+            parsed["type"],
+            parsed["algorithm"],
+            parsed["digits"],
+            parsed["period"],
+            now,
+            account_id
+        ))
+        conn.commit()
+    
+    return {
+        "message": "2FA 配置已从 URI 导入",
+        "issuer": parsed["issuer"] or parsed["label"],
+        "type": parsed["type"],
+        "digits": parsed["digits"]
+    }
 
 
 @app.delete("/api/accounts/{account_id}/totp")

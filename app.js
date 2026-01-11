@@ -1391,32 +1391,64 @@ function generateAndFillPassword() {
     showToast('⚡ 已生成强密码并复制');
 }
 
-// 2FA 显示与计算
+// 2FA 显示与计算 - 支持标准TOTP和Steam Guard
 let totpInterval = null;
 async function showTOTP(accountId) {
     try {
-        const res = await fetch(API + `/accounts/${accountId}/totp`, { headers: { Authorization: 'Bearer ' + token } });
-        const data = await res.json();
-        if (!data.secret) { showToast('未配置 2FA', true); return; }
+        // 使用后端生成接口（支持 Steam Guard）
+        const res = await fetch(API + `/accounts/${accountId}/totp/generate`, { 
+            headers: { Authorization: 'Bearer ' + token } 
+        });
         
-        const totp = new OTPAuth.TOTP({ algorithm: 'SHA1', digits: 6, period: 30, secret: OTPAuth.Secret.fromBase32(data.secret) });
-        const update = () => {
-            const code = totp.generate();
-            document.getElementById('totpCodeDisplay').textContent = code.slice(0,3) + ' ' + code.slice(3);
-            const remaining = 30 - (Math.round(new Date().getTime() / 1000.0) % 30);
+        if (!res.ok) {
+            const err = await res.json();
+            showToast(err.detail || '2FA 生成失败', true);
+            return;
+        }
+        
+        const data = await res.json();
+        const isSteam = data.type === 'steam';
+        const period = data.period || 30;
+        
+        const update = async () => {
+            // 每次都从后端获取最新验证码
+            const freshRes = await fetch(API + `/accounts/${accountId}/totp/generate`, { 
+                headers: { Authorization: 'Bearer ' + token } 
+            });
+            if (!freshRes.ok) return;
+            const freshData = await freshRes.json();
+            
+            const code = freshData.code;
+            const remaining = freshData.remaining;
+            
+            // Steam Guard 显示5位字母，标准TOTP显示分隔的数字
+            if (isSteam) {
+                document.getElementById('totpCodeDisplay').textContent = code;
+                document.getElementById('totpCodeDisplay').style.letterSpacing = '8px';
+            } else {
+                const mid = Math.floor(code.length / 2);
+                document.getElementById('totpCodeDisplay').textContent = code.slice(0, mid) + ' ' + code.slice(mid);
+                document.getElementById('totpCodeDisplay').style.letterSpacing = '4px';
+            }
+            
             const bar = document.getElementById('totpProgressBar');
-            bar.style.width = ((remaining / 30) * 100) + '%';
+            bar.style.width = ((remaining / period) * 100) + '%';
             bar.style.background = remaining < 5 ? '#ef4444' : 'var(--accent)';
             document.getElementById('totpCodeDisplay').style.color = remaining < 5 ? '#ef4444' : 'var(--accent)';
         };
         
         document.getElementById('totpModal').classList.add('show');
-        update();
+        await update();
         if (totpInterval) clearInterval(totpInterval);
         totpInterval = setInterval(update, 1000);
-        navigator.clipboard.writeText(totp.generate());
-        showToast('验证码已复制');
-    } catch (e) { console.error(e); showToast('2FA 生成失败', true); }
+        
+        // 复制验证码
+        navigator.clipboard.writeText(data.code);
+        showToast(isSteam ? 'Steam 验证码已复制' : '验证码已复制');
+    } catch (e) { 
+        console.error(e); 
+        showToast('2FA 生成失败', true); 
+    }
 }
 
 

@@ -9,10 +9,17 @@
 
 ### 核心功能
 - 🔐 **密码加密存储** - 使用 Fernet 对称加密，支持环境变量配置主密钥
-- 🛡️ **2FA 双重验证** - 内置 TOTP 验证码生成器，支持标准 6/8 位验证码
+- 🛡️ **完整 2FA 支持** - 标准 TOTP + Steam Guard，支持多种算法
 - 📷 **二维码扫描** - 直接上传或拖拽 2FA 二维码图片自动识别导入
 - 👥 **多用户隔离** - 每个用户独立数据空间，互不干扰
 - 🔒 **安全中间件** - 自动阻止访问敏感文件（源码、数据库、密钥）
+
+### 2FA 验证功能
+- 🔢 **标准 TOTP** - 支持 6/8 位数字验证码
+- 🎮 **Steam Guard** - 支持 Steam 专用 5 位字母验证码
+- 🔐 **多算法** - SHA1 / SHA256 / SHA512
+- 📝 **otpauth URI** - 支持从链接或二维码导入
+- ⏱️ **实时倒计时** - 验证码过期时间可视化
 
 ### 账号管理
 - 📁 自定义账号类型（Google、Microsoft、Discord 等）
@@ -167,6 +174,8 @@ docker-compose down
 | `/api/login` | POST | 用户登录 |
 | `/api/accounts` | GET/POST | 账号列表/创建 |
 | `/api/accounts/{id}/totp` | GET/POST/DELETE | 2FA 配置 |
+| `/api/accounts/{id}/totp/generate` | GET | 生成验证码（支持Steam） |
+| `/api/accounts/{id}/totp/parse` | POST | 从 URI 导入 2FA |
 | `/api/export` | GET | 导出数据 |
 | `/api/import` | POST | 导入数据 |
 | `/api/health` | GET | 健康检查（含密钥状态） |
@@ -176,8 +185,9 @@ docker-compose down
 ### v4.0 (当前版本)
 - ✨ 新增：二维码扫描导入 2FA 配置
 - ✨ 新增：2FA 配置模态框（替代 prompt 弹窗）
+- ✨ 新增：后端验证码生成（支持 Steam Guard）
+- ✨ 新增：otpauth URI 解析导入
 - 🔧 优化：后端代码结构重构
-- 🔧 优化：2FA API 支持更多配置项（issuer、算法、位数）
 - 🔒 安全：密钥状态检测与前端警告
 
 ### v3.0
