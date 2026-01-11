@@ -668,6 +668,7 @@ function openAddModal() {
     editingAccountId = null; editingTags = []; editingCombos = [];
     document.getElementById('accountModalTitle').textContent = '添加账号';
     document.getElementById('accType').innerHTML = accountTypes.map(t => `<option value="${t.id}">${t.icon} ${t.name}</option>`).join('');
+    document.getElementById('accCountry').innerHTML = generateCountryOptions();
     ['accName', 'accEmail', 'accPassword', 'accNotes'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('accCountry').value = '🌍';
     renderCombosBox(); renderTagsBox();
@@ -681,6 +682,7 @@ function openEditModal(id) {
     editingAccountId = id; editingTags = [...(acc.tags || [])]; editingCombos = [...(acc.combos || [])];
     document.getElementById('accountModalTitle').textContent = '编辑账号';
     document.getElementById('accType').innerHTML = accountTypes.map(t => `<option value="${t.id}" ${t.id === acc.type_id ? 'selected' : ''}>${t.icon} ${t.name}</option>`).join('');
+    document.getElementById('accCountry').innerHTML = generateCountryOptions();
     document.getElementById('accName').value = acc.customName || '';
     document.getElementById('accEmail').value = acc.email || '';
     document.getElementById('accPassword').value = acc.password || '';
