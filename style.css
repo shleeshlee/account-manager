@@ -1471,3 +1471,49 @@ body {
 .btn-danger:hover {
     background: rgba(239, 68, 68, 0.2);
 }
+
+/* 密码输入框样式 */
+.password-input-wrapper {
+    position: relative;
+}
+
+.password-input-wrapper .form-input {
+    padding-right: 80px;
+}
+
+.btn-toggle-pwd {
+    position: absolute;
+    right: 44px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    font-size: 1.1rem;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+    padding: 4px;
+}
+
+.btn-toggle-pwd:hover {
+    opacity: 1;
+}
+
+.btn-generate-pwd {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    font-size: 1.3rem;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.2s, transform 0.2s;
+    padding: 4px;
+}
+
+.btn-generate-pwd:hover {
+    opacity: 1;
+    transform: translateY(-50%) scale(1.15);
+}
