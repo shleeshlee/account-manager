@@ -50,6 +50,39 @@ body {
     color: var(--text-primary);
     min-height: 100vh;
     transition: background 0.3s, color 0.3s;
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* ===== 动态光斑背景（毛玻璃增强） ===== */
+body::before {
+    content: '';
+    position: fixed;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: 
+        radial-gradient(ellipse 600px 600px at 20% 30%, rgba(139, 92, 246, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse 500px 500px at 80% 70%, rgba(34, 197, 94, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse 400px 400px at 60% 20%, rgba(59, 130, 246, 0.05) 0%, transparent 50%);
+    animation: floatBlobs 30s ease-in-out infinite;
+    pointer-events: none;
+    z-index: -1;
+}
+
+[data-theme="light"] body::before {
+    background: 
+        radial-gradient(ellipse 600px 600px at 20% 30%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse 500px 500px at 80% 70%, rgba(34, 197, 94, 0.04) 0%, transparent 50%),
+        radial-gradient(ellipse 400px 400px at 60% 20%, rgba(59, 130, 246, 0.04) 0%, transparent 50%);
+}
+
+@keyframes floatBlobs {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    25% { transform: translate(2%, 3%) rotate(1deg); }
+    50% { transform: translate(-1%, 2%) rotate(-1deg); }
+    75% { transform: translate(1%, -2%) rotate(0.5deg); }
 }
 
 /* 登录页 */
@@ -281,6 +314,17 @@ body {
     cursor: pointer; 
 }
 .btn-batch-delete:hover { filter: brightness(1.1); }
+.btn-batch-props {
+    padding: 6px 12px;
+    background: var(--accent-dim);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    color: var(--accent);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-batch-props:hover { background: var(--accent); color: white; }
 .btn-batch-cancel { 
     padding: 6px 12px;
     background: var(--bg-card); 
@@ -335,6 +379,21 @@ body {
     text-align: center; 
     padding: 60px 20px; 
     color: var(--text-muted); 
+}
+.empty-state .empty-illustration {
+    width: 180px;
+    height: 180px;
+    margin-bottom: 20px;
+    opacity: 0.85;
+}
+.empty-state .empty-text {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+.empty-state .empty-hint {
+    font-size: 0.85rem;
+    color: var(--text-muted);
 }
 .empty-state .icon { font-size: 3rem; margin-bottom: 12px; opacity: 0.5; }
 
@@ -984,6 +1043,12 @@ body {
 
 /* 移动端样式 */
 @media (max-width: 768px) {
+    /* 去除移动端点击时的灰色方块 */
+    * {
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+    }
+    
     /* 侧边栏默认收起 */
     .sidebar { transform: translateX(-260px); }
     .sidebar.open { transform: translateX(0); }
@@ -995,12 +1060,12 @@ body {
     .sidebar-content { flex: 1; overflow-y: auto; min-height: 0; }
     
     /* 工具栏 */
-    .toolbar { left: 0; padding: 8px 12px; gap: 8px; height: 56px; }
+    .toolbar { left: 0; padding: 8px 12px; gap: 6px; height: 56px; }
     .btn-menu { display: flex; width: 34px; height: 34px; }
     .page-title { display: none; }
     
-    /* 搜索框紧凑 */
-    .search-box { width: auto; flex: 1; min-width: 80px; }
+    /* 搜索框拉长 */
+    .search-box { width: auto; flex: 1; min-width: 100px; }
     .search-box input { padding: 8px 10px 8px 32px; font-size: 0.8rem; }
     .search-icon { left: 10px; }
     
@@ -1008,9 +1073,57 @@ body {
     .view-toggle { flex-shrink: 0; }
     .view-btn { padding: 6px 10px; font-size: 0.9rem; }
     
-    /* 移动端批量操作 */
-    .batch-actions { padding: 4px 10px; gap: 8px; }
-    .batch-count { font-size: 0.8rem; }
+    /* ===== 移动端批量操作栏重设计 ===== */
+    .batch-actions {
+        padding: 4px 8px;
+        gap: 6px;
+        flex-wrap: nowrap;
+        border: none;
+        background: transparent;
+    }
+    
+    .batch-actions .batch-count {
+        font-size: 0.7rem;
+        padding: 4px 6px;
+        background: var(--accent-dim);
+        border-radius: 4px;
+        flex-shrink: 0;
+    }
+    
+    .batch-actions .btn-batch-select {
+        padding: 6px 8px;
+        font-size: 0.7rem;
+        flex-shrink: 0;
+    }
+    
+    .batch-actions .btn-batch-props {
+        padding: 6px 10px;
+        font-size: 0.9rem;
+        min-width: 32px;
+        border: none;
+        background: var(--accent);
+        color: white;
+    }
+    
+    .batch-actions .btn-batch-delete {
+        padding: 6px 10px;
+        font-size: 0.9rem;
+        min-width: 32px;
+    }
+    
+    /* 隐藏按钮文字，只显示emoji（全选除外） */
+    .batch-actions .btn-batch-props,
+    .batch-actions .btn-batch-delete {
+        font-size: 0;
+    }
+    .batch-actions .btn-batch-props::before {
+        content: '🏷️';
+        font-size: 1rem;
+    }
+    .batch-actions .btn-batch-delete::before {
+        content: '🗑️';
+        font-size: 1rem;
+    }
     
     /* 卡片单列 */
     .cards-grid { grid-template-columns: 1fr; }
@@ -1375,6 +1488,79 @@ body {
 .password-gen-btn { cursor: pointer; color: var(--accent); font-size: 0.8rem; font-weight: 600; transition: all 0.2s; }
 .password-gen-btn:hover { text-shadow: 0 0 8px rgba(139, 92, 246, 0.6); transform: scale(1.05); }
 #btnConfig2FA { display: none; } /* 默认隐藏 */
+
+/* ===== HTTP 安全警告栏 ===== */
+.http-warning-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 9998;
+    background: linear-gradient(135deg, rgba(234, 179, 8, 0.95), rgba(217, 119, 6, 0.95));
+    backdrop-filter: blur(8px);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: #1a1a1a;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.2);
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+}
+
+.http-warning-bar.show {
+    transform: translateY(0);
+}
+
+.http-warning-bar .warning-icon {
+    font-size: 1rem;
+}
+
+.http-warning-bar .warning-text {
+    font-weight: 500;
+}
+
+.http-warning-bar .warning-link {
+    color: #1a1a1a;
+    text-decoration: underline;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.http-warning-bar .warning-dismiss {
+    position: absolute;
+    right: 12px;
+    background: none;
+    border: none;
+    color: #1a1a1a;
+    cursor: pointer;
+    font-size: 1rem;
+    opacity: 0.7;
+    padding: 4px;
+}
+
+.http-warning-bar .warning-dismiss:hover {
+    opacity: 1;
+}
+
+/* ===== 状态颜色自动编码 ===== */
+.account-card.status-normal {
+    border-left: 3px solid var(--green);
+}
+
+.account-card.status-warning {
+    border-left: 3px solid var(--yellow);
+}
+
+.account-card.status-error {
+    border-left: 3px solid var(--red);
+}
+
+.account-card.status-verify {
+    border-left: 3px solid #3b82f6;
+}
 /* ==================== v4.0 新增：二维码上传区域样式 ==================== */
 
 .qr-upload-zone {

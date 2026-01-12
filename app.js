@@ -198,6 +198,9 @@ async function loadUserAvatar() {
 }
 
 async function checkSecurity() {
+    // 检查是否是不安全的HTTP连接（排除localhost和内网）
+    checkHttpWarning();
+    
     try {
         const res = await fetch(API + '/health');
         const data = await res.json();
@@ -220,6 +223,32 @@ async function checkSecurity() {
         }
     } catch (e) {
         console.error('安全检查失败', e);
+    }
+}
+
+// HTTP 警告检测
+function checkHttpWarning() {
+    const isHttp = window.location.protocol === 'http:';
+    const hostname = window.location.hostname;
+    const isLocal = hostname === 'localhost' || 
+                    hostname === '127.0.0.1' ||
+                    hostname.startsWith('192.168.') ||
+                    hostname.startsWith('10.') ||
+                    hostname.startsWith('172.');
+    const dismissed = sessionStorage.getItem('httpWarningDismissed');
+    
+    if (isHttp && !isLocal && !dismissed) {
+        const bar = document.getElementById('httpWarningBar');
+        if (bar) bar.classList.add('show');
+    }
+}
+
+// 关闭 HTTP 警告
+function dismissHttpWarning() {
+    const bar = document.getElementById('httpWarningBar');
+    if (bar) {
+        bar.classList.remove('show');
+        sessionStorage.setItem('httpWarningDismissed', 'true');
     }
 }
 
@@ -328,7 +357,29 @@ function renderSidebar() {
 // 卡片渲染
 function renderCards() {
     const filtered = getFilteredAccounts(), sorted = sortAccounts(filtered);
-    if (sorted.length === 0) { document.getElementById('cardsList').innerHTML = `<div class="empty-state"><div class="icon">📭</div><div>暂无账号</div></div>`; return; }
+    if (sorted.length === 0) { 
+        document.getElementById('cardsList').innerHTML = `
+            <div class="empty-state">
+                <svg class="empty-illustration" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <ellipse cx="100" cy="160" rx="60" ry="15" fill="var(--border)" opacity="0.3"/>
+                    <path d="M60 80 L60 140 Q60 160 100 160 Q140 160 140 140 L140 80 Q140 60 100 60 Q60 60 60 80Z" fill="var(--bg-card)" stroke="var(--border)" stroke-width="2"/>
+                    <path d="M65 80 L65 85 Q65 90 100 90 Q135 90 135 85 L135 80" fill="var(--yellow)" opacity="0.3"/>
+                    <ellipse cx="100" cy="60" rx="40" ry="12" fill="var(--bg-hover)" stroke="var(--border)" stroke-width="2"/>
+                    <path d="M85 90 Q85 110 90 115 Q95 120 95 125" stroke="var(--yellow)" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+                    <circle cx="100" cy="35" r="25" fill="var(--bg-card)" stroke="var(--border)" stroke-width="2"/>
+                    <circle cx="80" cy="15" r="10" fill="var(--bg-card)" stroke="var(--border)" stroke-width="2"/>
+                    <circle cx="120" cy="15" r="10" fill="var(--bg-card)" stroke="var(--border)" stroke-width="2"/>
+                    <circle cx="92" cy="32" r="3" fill="var(--text-muted)"/>
+                    <circle cx="108" cy="32" r="3" fill="var(--text-muted)"/>
+                    <ellipse cx="100" cy="40" rx="4" ry="3" fill="var(--text-muted)"/>
+                    <text x="150" y="50" font-size="24" fill="var(--accent)" opacity="0.6">?</text>
+                </svg>
+                <div class="empty-text">这里空空如也~</div>
+                <div class="empty-hint">快去添加第一个账号吧 🍯</div>
+            </div>
+        `; 
+        return; 
+    }
 
     // 建立值ID到值对象的映射，方便查找
     const valueMap = {};
@@ -339,17 +390,28 @@ function renderCards() {
     document.getElementById('cardsList').innerHTML = sorted.map(acc => {
         const type = accountTypes.find(t => t.id === acc.type_id) || { icon: '🔑', color: '#8b5cf6' };
         
-        // 根据combos判断卡片状态（不再根据选中状态变色）
+        // 根据combos判断卡片状态和自动着色
         let cardClass = 'account-card';
         const combos = acc.combos || [];
-        // 查找第一个属性组（账号状态）的值来决定卡片样式
-        if (combos.length > 0 && propertyGroups.length > 0) {
-            const firstGroup = propertyGroups[0];
-            for (const combo of combos) {
-                const statusValue = (firstGroup.values || []).find(v => combo.includes(v.id));
-                if (statusValue?.name === '受限') { cardClass += ' warning'; break; }
-                else if (statusValue?.name === '不可用') { cardClass += ' error'; break; }
-            }
+        
+        // 收集所有属性值名称用于状态检测
+        const allValueNames = [];
+        combos.forEach(combo => {
+            combo.forEach(vid => {
+                const v = valueMap[vid];
+                if (v) allValueNames.push(v.name.toLowerCase());
+            });
+        });
+        
+        // 状态关键词检测（优先级：error > warning > verify > normal）
+        if (allValueNames.some(n => n.includes('封') || n.includes('禁') || n.includes('不可用') || n.includes('停用') || n.includes('异常'))) {
+            cardClass += ' status-error error';
+        } else if (allValueNames.some(n => n.includes('受限') || n.includes('限制') || n.includes('风控') || n.includes('警告'))) {
+            cardClass += ' status-warning warning';
+        } else if (allValueNames.some(n => n.includes('验证') || n.includes('待') || n.includes('审核'))) {
+            cardClass += ' status-verify';
+        } else if (allValueNames.some(n => n.includes('正常') || n.includes('活跃') || n.includes('可用'))) {
+            cardClass += ' status-normal';
         }
 
         // 渲染组合标签
@@ -1688,6 +1750,130 @@ async function delete2FA() {
             if (btn) { btn.innerHTML = '🛡️ 配置 2FA'; btn.style.color = ''; btn.style.borderColor = ''; btn.style.background = ''; }
         } else { showToast('移除失败', true); }
     } catch (e) { showToast('网络错误', true); }
+}
+
+// ==================== 批量修改属性功能 ====================
+let batchPropsToAdd = [];
+let batchPropsToRemove = [];
+
+function openBatchPropsModal() {
+    if (selectedAccounts.size === 0) {
+        showToast('请先选择账号', true);
+        return;
+    }
+    
+    batchPropsToAdd = [];
+    batchPropsToRemove = [];
+    
+    const existing = document.getElementById('batchPropsOverlay');
+    if (existing) existing.remove();
+    
+    let html = `
+    <div id="batchPropsOverlay" class="combo-overlay">
+        <div class="combo-dialog" style="max-width:500px">
+            <div class="combo-dialog-header">
+                <span>🏷️ 批量修改属性</span>
+                <button class="combo-close" onclick="closeBatchPropsModal()">✕</button>
+            </div>
+            <div class="combo-dialog-body">
+                <div class="hint-box" style="margin-bottom:16px">
+                    <p>已选择 <b>${selectedAccounts.size}</b> 个账号。点击属性切换：添加(绿) → 移除(红) → 取消</p>
+                </div>`;
+    
+    propertyGroups.forEach(g => {
+        html += `<div class="combo-group">
+            <div class="combo-group-name">${escapeHtml(g.name)}</div>
+            <div class="combo-group-options">`;
+        (g.values || []).forEach(v => {
+            html += `<div class="combo-option" data-vid="${v.id}" onclick="toggleBatchProp(this, ${v.id})">
+                <span class="combo-check-dot" style="background:${escapeAttr(v.color)}"></span>
+                ${escapeHtml(v.name)}
+            </div>`;
+        });
+        html += '</div></div>';
+    });
+    
+    html += `
+            </div>
+            <div class="combo-dialog-footer">
+                <button class="combo-btn" onclick="closeBatchPropsModal()">取消</button>
+                <button class="combo-btn primary" onclick="applyBatchProps()">应用更改</button>
+            </div>
+        </div>
+    </div>`;
+    
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function closeBatchPropsModal() {
+    const overlay = document.getElementById('batchPropsOverlay');
+    if (overlay) overlay.remove();
+}
+
+function toggleBatchProp(el, vid) {
+    const isAdd = batchPropsToAdd.includes(vid);
+    const isRemove = batchPropsToRemove.includes(vid);
+    
+    if (!isAdd && !isRemove) {
+        batchPropsToAdd.push(vid);
+        el.style.borderColor = '#22c55e';
+        el.style.background = 'rgba(34, 197, 94, 0.15)';
+        el.style.color = '#22c55e';
+    } else if (isAdd) {
+        batchPropsToAdd = batchPropsToAdd.filter(v => v !== vid);
+        batchPropsToRemove.push(vid);
+        el.style.borderColor = '#ef4444';
+        el.style.background = 'rgba(239, 68, 68, 0.15)';
+        el.style.color = '#ef4444';
+        el.style.textDecoration = 'line-through';
+    } else {
+        batchPropsToRemove = batchPropsToRemove.filter(v => v !== vid);
+        el.style.borderColor = '';
+        el.style.background = '';
+        el.style.color = '';
+        el.style.textDecoration = '';
+    }
+}
+
+async function applyBatchProps() {
+    if (batchPropsToAdd.length === 0 && batchPropsToRemove.length === 0) {
+        showToast('未选择任何属性变更', true);
+        return;
+    }
+    
+    const selectedIds = Array.from(selectedAccounts);
+    let successCount = 0;
+    
+    for (const accId of selectedIds) {
+        const acc = accounts.find(a => a.id === accId);
+        if (!acc) continue;
+        
+        let newCombos = [...(acc.combos || [])];
+        
+        batchPropsToAdd.forEach(vid => {
+            const hasIt = newCombos.some(combo => combo.includes(vid));
+            if (!hasIt) newCombos.push([vid]);
+        });
+        
+        batchPropsToRemove.forEach(vid => {
+            newCombos = newCombos.map(combo => combo.filter(v => v !== vid)).filter(combo => combo.length > 0);
+        });
+        
+        try {
+            const res = await fetch(API + `/accounts/${accId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+                body: JSON.stringify({ combos: newCombos })
+            });
+            if (res.ok) successCount++;
+        } catch (e) {}
+    }
+    
+    closeBatchPropsModal();
+    await loadAccounts();
+    renderSidebar();
+    renderCards();
+    showToast(`✅ 已更新 ${successCount} 个账号的属性`);
 }
 
 init();

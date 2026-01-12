@@ -87,6 +87,7 @@
                 <div class="batch-actions" id="batchActions">
                     <span class="batch-count" id="batchCount">已选 0 项</span>
                     <button class="btn-batch-select" onclick="toggleSelectAll()">全选</button>
+                    <button class="btn-batch-props" onclick="openBatchPropsModal()">🏷️ 修改属性</button>
                     <button class="btn-batch-delete" onclick="batchDelete()">删除</button>
                 </div>
                 <!-- 搜索框 -->
@@ -104,7 +105,7 @@
                 <!-- 移动端按钮 -->
                 <button class="btn-toolbar-sm mobile-only" id="btnBatchModeMobile" onclick="toggleBatchMode()" title="勾选">✅ 勾选</button>
                 <div class="tools-menu-wrapper mobile-only">
-                    <button class="btn-toolbar-sm" onclick="toggleToolsMenu()" title="更多">⚙️ 更多</button>
+                    <button class="btn-toolbar-sm" onclick="toggleToolsMenu()" title="更多">⚙️</button>
                     <div class="tools-menu" id="toolsMenu">
                         <div class="tools-menu-item" onclick="openAddModal();closeToolsMenu()">➕ 添加账号</div>
                         <div class="tools-menu-item" onclick="openImportModal();closeToolsMenu()">📥 导入数据</div>
@@ -325,6 +326,14 @@
 
     <!-- Toast 提示 -->
     <div class="toast" id="toast"></div>
+
+    <!-- HTTP 安全警告栏 -->
+    <div class="http-warning-bar" id="httpWarningBar">
+        <span class="warning-icon">⚠️</span>
+        <span class="warning-text">当前处于 HTTP 不安全模式，数据可能被窃听。</span>
+        <span class="warning-link" onclick="window.open('https://letsencrypt.org/','_blank')">建议配置 HTTPS</span>
+        <button class="warning-dismiss" onclick="dismissHttpWarning()" title="关闭提示">✕</button>
+    </div>
 
     <!-- 脚本加载 -->
     <script>
