@@ -322,6 +322,7 @@ function renderSidebar() {
     let typesHtml = `<div class="collapsible-group"><div class="group-header" onclick="toggleGroup(this)"><span class="group-arrow">▼</span><span>账号类型</span><span class="group-actions"><button class="btn-tiny" onclick="event.stopPropagation();openTypeManager()">⚙</button></span></div><div class="group-content">`;
     accountTypes.forEach(t => {
         const count = accounts.filter(a => a.type_id === t.id).length;
+        if (count === 0) return; // 跳过没有账号的类型
         const isSelected = currentFilters['type_' + t.id];
         typesHtml += `<div class="nav-item${isSelected ? ' active' : ''}" onclick="filterByType(${t.id})"><span class="nav-icon" style="color:${escapeAttr(t.color)}">${escapeHtml(t.icon)}</span><span class="nav-label">${escapeHtml(t.name)}</span><span class="nav-count">${count}</span></div>`;
     });
@@ -761,6 +762,10 @@ function openAddModal() {
     document.getElementById('accCountry').innerHTML = generateCountryOptions();
     ['accName', 'accEmail', 'accPassword', 'accNotes'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('accCountry').value = '🌍';
+    // 密码默认隐藏
+    const pwdField = document.getElementById('accPassword');
+    if (pwdField) { pwdField.classList.add('pwd-hidden'); }
+    updateTogglePwdBtn(false);
     renderCombosBox(); renderTagsBox();
     document.getElementById('btnConfig2FA').style.display = 'none';
     document.getElementById('accountModal').classList.add('show');
@@ -778,8 +783,15 @@ function openEditModal(id) {
     document.getElementById('accPassword').value = acc.password || '';
     document.getElementById('accCountry').value = acc.country || '🌍';
     document.getElementById('accNotes').value = acc.notes || '';
+    // 密码默认隐藏
+    const pwdField = document.getElementById('accPassword');
+    if (pwdField) { pwdField.classList.add('pwd-hidden'); }
+    updateTogglePwdBtn(false);
     renderCombosBox(); renderTagsBox();
-    document.getElementById('btnConfig2FA').style.display = 'block';
+    // 显示2FA按钮并更新状态
+    const btn2FA = document.getElementById('btnConfig2FA');
+    btn2FA.style.display = 'inline-flex';
+    btn2FA.textContent = acc.has_2fa ? '🛡️ 2FA ✓' : '🛡️ 2FA';
     document.getElementById('accountModal').classList.add('show');
 }
 
@@ -856,12 +868,106 @@ function confirmComboSelector() {
     cancelComboSelector();
 }
 
-function renderTagsBox() {
-    document.getElementById('accTagsBox').innerHTML = editingTags.map(t => `<span class="tag-badge">${escapeHtml(t)}<span class="remove" onclick="removeTag('${escapeHtml(t)}')">✕</span></span>`).join('') + '<input type="text" class="tag-input" id="accTagInput" placeholder="回车添加" onkeydown="handleTagInput(event)">';
+// 获取所有已使用的标签（历史标签）
+function getAllUsedTags() {
+    const tagSet = new Set();
+    accounts.forEach(acc => {
+        (acc.tags || []).forEach(t => tagSet.add(t));
+    });
+    return Array.from(tagSet).sort();
 }
 
-function handleTagInput(e) { if (e.key === 'Enter') { e.preventDefault(); const val = e.target.value.trim(); if (val && !editingTags.includes(val)) { editingTags.push(val); renderTagsBox(); } e.target.value = ''; } }
-function removeTag(tag) { editingTags = editingTags.filter(t => t !== tag); renderTagsBox(); }
+// 标签历史记录 - 保存到localStorage
+function getTagHistory() {
+    try {
+        return JSON.parse(localStorage.getItem('tagHistory') || '[]');
+    } catch { return []; }
+}
+
+function addToTagHistory(tag) {
+    let history = getTagHistory();
+    history = history.filter(t => t !== tag);
+    history.unshift(tag);
+    history = history.slice(0, 50);
+    localStorage.setItem('tagHistory', JSON.stringify(history));
+}
+
+function removeFromTagHistory(tag) {
+    let history = getTagHistory();
+    history = history.filter(t => t !== tag);
+    localStorage.setItem('tagHistory', JSON.stringify(history));
+    renderTagSuggestions(document.getElementById('accTagInput')?.value || '');
+}
+
+// 渲染标签建议
+function renderTagSuggestions(filter = '') {
+    const suggestionsEl = document.getElementById('tagSuggestions');
+    if (!suggestionsEl) return;
+    
+    const history = getTagHistory();
+    const allTags = getAllUsedTags();
+    let suggestions = [...history];
+    allTags.forEach(t => { if (!suggestions.includes(t)) suggestions.push(t); });
+    
+    const filterLower = filter.toLowerCase();
+    suggestions = suggestions.filter(t => 
+        !editingTags.includes(t) && 
+        (filter === '' || t.toLowerCase().includes(filterLower))
+    );
+    
+    if (suggestions.length === 0) {
+        suggestionsEl.innerHTML = '';
+        suggestionsEl.style.display = 'none';
+        return;
+    }
+    
+    suggestions = suggestions.slice(0, 10);
+    
+    suggestionsEl.innerHTML = suggestions.map(t => `
+        <span class="tag-suggestion" onclick="selectTagSuggestion('${escapeHtml(t)}')">
+            ${escapeHtml(t)}
+            <span class="remove-history" onclick="event.stopPropagation(); removeFromTagHistory('${escapeHtml(t)}')" title="从历史中移除">✕</span>
+        </span>
+    `).join('');
+    suggestionsEl.style.display = 'flex';
+}
+
+function selectTagSuggestion(tag) {
+    if (!editingTags.includes(tag)) {
+        editingTags.push(tag);
+        addToTagHistory(tag);
+        window._tagJustEdited = true;
+        renderTagsBox();
+    }
+}
+
+function renderTagsBox() {
+    const tagsHtml = editingTags.map(t => 
+        `<span class="tag-badge">${escapeHtml(t)}<span class="remove" onclick="removeTag('${escapeHtml(t)}')">✕</span></span>`
+    ).join('');
+    
+    const inputHtml = `<input type="text" class="tag-input" id="accTagInput" placeholder="回车添加" 
+        autocomplete="off" data-lpignore="true" data-form-type="other"
+        onkeydown="handleTagInput(event)"
+        oninput="renderTagSuggestions(this.value)"
+        onfocus="renderTagSuggestions(this.value)">
+        <div class="tag-suggestions" id="tagSuggestions"></div>`;
+    
+    document.getElementById('accTagsBox').innerHTML = tagsHtml + inputHtml;
+    
+    // 只在用户操作标签后才自动聚焦
+    if (window._tagJustEdited) {
+        window._tagJustEdited = false;
+        setTimeout(() => {
+            const input = document.getElementById('accTagInput');
+            const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            if(input && !isMobile) input.focus();
+        }, 0);
+    }
+}
+
+function handleTagInput(e) { if (e.key === 'Enter') { e.preventDefault(); const val = e.target.value.trim(); if (val && !editingTags.includes(val)) { editingTags.push(val); addToTagHistory(val); window._tagJustEdited = true; renderTagsBox(); } e.target.value = ''; } }
+function removeTag(tag) { editingTags = editingTags.filter(t => t !== tag); window._tagJustEdited = true; renderTagsBox(); }
 function closeAccountModal() { document.getElementById('accountModal').classList.remove('show'); }
 
 async function saveAccount() {
@@ -1482,9 +1588,13 @@ function generateAndFillPassword() {
 function togglePasswordVisibility() {
     const input = document.getElementById('accPassword');
     if (!input) return;
-    const isVisible = input.type === 'text';
-    input.type = isVisible ? 'password' : 'text';
-    updateTogglePwdBtn(!isVisible);
+    const isHidden = input.classList.contains('pwd-hidden');
+    if (isHidden) {
+        input.classList.remove('pwd-hidden');
+    } else {
+        input.classList.add('pwd-hidden');
+    }
+    updateTogglePwdBtn(isHidden);
 }
 
 function updateTogglePwdBtn(isVisible) {

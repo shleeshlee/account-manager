@@ -1011,7 +1011,7 @@ def export_data(user: dict = Depends(get_current_user)):
         accounts = []
         for row in conn.execute(f"SELECT * FROM user_{user['id']}_accounts").fetchall():
             acc = dict(row)
-            accounts.append({
+            account_data = {
                 "id": acc["id"],
                 "type_id": acc["type_id"],
                 "email": acc["email"],
@@ -1024,7 +1024,18 @@ def export_data(user: dict = Depends(get_current_user)):
                 "notes": acc["notes"] or "",
                 "is_favorite": bool(acc["is_favorite"]),
                 "created_at": acc["created_at"],
-            })
+            }
+            # 导出2FA配置
+            if acc.get("totp_secret"):
+                account_data["totp"] = {
+                    "secret": decrypt_password(acc["totp_secret"]),
+                    "issuer": acc.get("totp_issuer") or "",
+                    "type": acc.get("totp_type") or "totp",
+                    "algorithm": acc.get("totp_algorithm") or "SHA1",
+                    "digits": acc.get("totp_digits") or 6,
+                    "period": acc.get("totp_period") or 30,
+                }
+            accounts.append(account_data)
 
     return {
         "version": VERSION,
@@ -1153,6 +1164,7 @@ def import_data(data: dict, user: dict = Depends(get_current_user)):
                         skipped_accounts += 1
                         continue
                     elif import_mode == "overwrite":
+                        # 基本字段更新
                         conn.execute(f"""
                             UPDATE user_{user['id']}_accounts SET
                             type_id = ?, password = ?, country = ?, custom_name = ?,
@@ -1172,13 +1184,31 @@ def import_data(data: dict, user: dict = Depends(get_current_user)):
                             now,
                             existing_id
                         ))
+                        # 导入2FA配置
+                        totp_data = acc.get("totp")
+                        if totp_data and totp_data.get("secret"):
+                            conn.execute(f"""
+                                UPDATE user_{user['id']}_accounts SET
+                                totp_secret = ?, totp_issuer = ?, totp_type = ?,
+                                totp_algorithm = ?, totp_digits = ?, totp_period = ?
+                                WHERE id = ?
+                            """, (
+                                encrypt_password(totp_data.get("secret", "")),
+                                totp_data.get("issuer", ""),
+                                totp_data.get("type", "totp"),
+                                totp_data.get("algorithm", "SHA1"),
+                                totp_data.get("digits", 6),
+                                totp_data.get("period", 30),
+                                existing_id
+                            ))
                         updated_accounts += 1
                         continue
 
-                conn.execute(f"""
+                cursor = conn.execute(f"""
                     INSERT INTO user_{user['id']}_accounts 
-                    (type_id, email, password, country, custom_name, properties, combos, tags, notes, is_favorite, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (type_id, email, password, country, custom_name, properties, combos, tags, notes, is_favorite, created_at, updated_at,
+                     totp_secret, totp_issuer, totp_type, totp_algorithm, totp_digits, totp_period)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     new_type_id,
                     email,
@@ -1191,7 +1221,13 @@ def import_data(data: dict, user: dict = Depends(get_current_user)):
                     acc.get("notes", ""),
                     1 if acc.get("is_favorite") else 0,
                     acc.get("created_at", now),
-                    now
+                    now,
+                    encrypt_password(acc.get("totp", {}).get("secret", "")) if acc.get("totp", {}).get("secret") else "",
+                    acc.get("totp", {}).get("issuer", ""),
+                    acc.get("totp", {}).get("type", "totp"),
+                    acc.get("totp", {}).get("algorithm", "SHA1"),
+                    acc.get("totp", {}).get("digits", 6),
+                    acc.get("totp", {}).get("period", 30),
                 ))
                 imported_accounts += 1
             except Exception as e:
