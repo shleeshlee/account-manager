@@ -119,14 +119,91 @@ function getCountryDisplay(country) {
 
 // 主题
 let currentTheme = localStorage.getItem('theme') || 'dark';
+let isSwitching = false;
+
 function initTheme() {
     document.documentElement.setAttribute('data-theme', currentTheme === 'light' ? 'light' : '');
-    ['themeBtn', 'themeBtn2'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = currentTheme === 'light' ? '☀️' : '🌙'; });
+    ['themeBtn', 'themeBtn2'].forEach(id => { 
+        const el = document.getElementById(id); 
+        if (el) {
+            const icon = el.querySelector('.icon');
+            if (icon) icon.textContent = currentTheme === 'light' ? '☀️' : '🌙';
+            else el.textContent = currentTheme === 'light' ? '☀️' : '🌙';
+        }
+    });
 }
+
 function toggleTheme() {
     currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
     localStorage.setItem('theme', currentTheme);
     initTheme();
+}
+
+// 带能量脉冲动画的主题切换
+function switchThemeWithEffect(event) {
+    if (isSwitching) return;
+    isSwitching = true;
+
+    const btn = event.currentTarget;
+    const rect = btn.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    const toLight = newTheme === 'light';
+
+    // 按钮旋转动画
+    btn.classList.add('switching');
+
+    // 创建脉冲环
+    createPulseRings(cx, cy, toLight);
+
+    // 闪光效果
+    const flash = document.getElementById('flashOverlay');
+    if (flash) {
+        flash.style.setProperty('--cx', cx + 'px');
+        flash.style.setProperty('--cy', cy + 'px');
+        flash.className = 'flash-overlay ' + (toLight ? 'to-light' : 'to-dark') + ' flash';
+    }
+
+    // 立即切换主题
+    setTimeout(() => {
+        currentTheme = newTheme;
+        localStorage.setItem('theme', currentTheme);
+        initTheme();
+    }, 50);
+
+    // 清理
+    setTimeout(() => {
+        btn.classList.remove('switching');
+        if (flash) flash.className = 'flash-overlay';
+        isSwitching = false;
+    }, 400);
+}
+
+function createPulseRings(cx, cy, toLight) {
+    const colors = toLight 
+        ? ['rgba(251, 191, 36, 0.6)', 'rgba(124, 58, 237, 0.4)']
+        : ['rgba(139, 92, 246, 0.6)', 'rgba(99, 102, 241, 0.4)'];
+    
+    const sizes = [80, 120];
+    
+    colors.forEach((color, i) => {
+        const ring = document.createElement('div');
+        ring.className = 'pulse-ring';
+        ring.style.cssText = `
+            left: ${cx}px;
+            top: ${cy}px;
+            width: ${sizes[i]}vmax;
+            height: ${sizes[i]}vmax;
+            border: 3px solid ${color};
+            box-shadow: 0 0 30px ${color}, inset 0 0 30px ${color.replace('0.6', '0.2').replace('0.4', '0.1')};
+        `;
+        document.body.appendChild(ring);
+        
+        setTimeout(() => ring.classList.add('burst'), i * 60);
+        setTimeout(() => ring.remove(), 500);
+    });
 }
 
 // 登录注册
