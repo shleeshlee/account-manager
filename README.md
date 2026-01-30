@@ -5,6 +5,10 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-5.1-green.svg)]()
 
+> **👤 作者:** WanWan  
+> **📦 开源协议:** MIT (免费使用，保留署名)  
+> **⚠️ 声明:** 本项目完全免费开源，如果你是付费获取的，你被骗了！
+
 ## ✨ v5.1 更新内容 (安全修复版)
 
 ### 🔐 安全增强
@@ -40,24 +44,21 @@
 
 ## 🚀 快速部署
 
-### 方式一：Docker 一键部署（推荐）
+### 方式一：一键安装（推荐）
 
 **前提：已安装 Docker 和 Docker Compose**
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/shleeshlee/account-manager.git
-cd account-manager
+git clone https://github.com/shleeshlee/AccBox.git
+cd AccBox
 
-# 2. 创建配置文件并设置密钥
-cp .env.example .env
-# 编辑 .env，填入您的 APP_MASTER_KEY（必须！否则会显示安全警告）
+# 2. 一键安装（自动生成密钥、创建配置、启动服务）
+chmod +x install.sh && ./install.sh
 
-# 3. 启动服务
-docker-compose up -d
-
-# 4. 访问
-# 浏览器打开 http://localhost:9111
+# 3. 完成！
+# 安装结束后会显示访问地址和自动生成的密钥
+# 密钥已自动保存到 .env 文件，请妥善备份
 ```
 
 ### 方式二：手动部署
@@ -94,6 +95,14 @@ chmod +x update.sh
 3. 🚀 重启服务
 
 ## ⚙️ 配置说明
+
+### 密钥生成工具
+
+如果需要单独生成密钥（不运行完整安装）：
+
+```bash
+chmod +x keygen.sh && ./keygen.sh
+```
 
 ### 配置文件 (.env)
 
@@ -147,7 +156,7 @@ curl -X POST http://localhost:9111/api/backup \
 ## 📁 项目结构
 
 ```
-account-manager/
+AccBox/
 ├── index.html          # 前端页面
 ├── style.css           # 样式文件
 ├── app.js              # 前端逻辑
@@ -157,6 +166,8 @@ account-manager/
 ├── docker-compose.yml  # Docker Compose 配置
 ├── .env.example        # 配置文件模板
 ├── .gitignore          # Git 忽略规则
+├── install.sh          # 一键安装脚本
+├── keygen.sh           # 密钥生成工具
 ├── update.sh           # 一键更新脚本
 ├── docker/
 │   ├── nginx.conf      # Nginx 配置
